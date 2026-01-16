@@ -40,7 +40,16 @@ const TRANSLATIONS = {
     copyLink: "Invite link copied to clipboard",
     loginError: "Login Failed",
     username: "Username",
-    password: "Password"
+    password: "Password",
+    promote: "Promote to Admin",
+    demote: "Demote to Member",
+    management: "Management",
+    verifyEmail: "Verify Email",
+    emailVerified: "Email Verified",
+    forgotPassword: "Forgot Password?",
+    recoverySent: "Recovery link sent to your email",
+    verifySent: "Verification email sent!",
+    resend: "Resend"
   },
   cn: {
     appName: "网球相册 AceLine",
@@ -65,7 +74,16 @@ const TRANSLATIONS = {
     copyLink: "邀请链接已复制到剪贴板",
     loginError: "登录失败",
     username: "用户名",
-    password: "密码"
+    password: "密码",
+    promote: "设为管理员",
+    demote: "降级为成员",
+    management: "管理系统",
+    verifyEmail: "验证邮箱",
+    emailVerified: "邮箱已验证",
+    forgotPassword: "忘记密码？",
+    recoverySent: "密码重置链接已发送至邮箱",
+    verifySent: "验证邮件已发送！",
+    resend: "重新发送"
   }
 };
 
@@ -79,13 +97,14 @@ const TennisBallIcon = ({ className = "w-16 h-16" }) => (
 );
 
 type Role = 'user' | 'admin' | 'super' | 'owner';
-type Screen = 'auth' | 'login_form' | 'register_form' | 'albums' | 'settings' | 'members' | 'gallery_view' | 'owner_dashboard' | 'cloud_setup';
+type Screen = 'auth' | 'login_form' | 'register_form' | 'albums' | 'settings' | 'members' | 'gallery_view' | 'owner_dashboard' | 'cloud_setup' | 'forgot_password';
 
 interface User {
   username: string;
   password: string;
   role: Role;
   email: string;
+  isVerified: boolean;
   communityId: string;
   inviteCode?: string;
   cloudConfig?: CloudConfig;
@@ -96,6 +115,7 @@ const APP_OWNER_USER: User = {
     password: "ACE-7788",
     email: "zoezhou85@hotmail.com",
     role: "owner",
+    isVerified: true,
     communityId: "SYSTEM_ROOT"
 };
 
@@ -114,10 +134,12 @@ const App = () => {
   const [screen, setScreen] = useState<Screen>('auth');
   const [loginU, setLoginU] = useState('');
   const [loginP, setLoginP] = useState('');
+  const [recoveryEmail, setRecoveryEmail] = useState('');
   
   // Registration / Invite logic
   const [regU, setRegU] = useState('');
   const [regP, setRegP] = useState('');
+  const [regE, setRegE] = useState('');
   const [regI, setRegI] = useState('');
 
   const [userDb, setUserDb] = useState<User[]>(() => {
@@ -152,19 +174,44 @@ const App = () => {
 
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
-    // In real app, we verify regI against valid invite codes in DB
     const isMasterKey = MASTER_KEYS.includes(regI);
+    const inviter = userDb.find(u => u.inviteCode === regI);
+    const targetCid = inviter ? inviter.communityId : (isMasterKey ? `COMM_${Math.random().toString(36).substr(2, 6).toUpperCase()}` : 'GUEST_POOL');
+
     const newUser: User = {
         username: regU,
         password: regP,
-        email: `${regU}@example.com`,
+        email: regE || `${regU}@example.com`,
+        isVerified: false,
         role: isMasterKey ? 'super' : 'user',
-        communityId: isMasterKey ? `COMM_${Math.random().toString(36).substr(2, 6).toUpperCase()}` : 'GUEST_POOL',
+        communityId: targetCid,
         inviteCode: Math.random().toString(36).substr(2, 8).toUpperCase()
     };
     setUserDb([...userDb, newUser]);
     setCurrentUser(newUser);
     setScreen(newUser.role === 'super' ? 'cloud_setup' : 'albums');
+  };
+
+  const simulateVerifyEmail = () => {
+    if (!currentUser) return;
+    alert(t.verifySent);
+    // Simulate real verification after 2 seconds
+    setTimeout(() => {
+        const updated = userDb.map(u => u.username === currentUser.username ? { ...u, isVerified: true } : u);
+        setUserDb(updated);
+        setCurrentUser({ ...currentUser, isVerified: true });
+    }, 2000);
+  };
+
+  const simulateForgotPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    alert(t.recoverySent);
+    setScreen('login_form');
+  };
+
+  const changeUserRole = (username: string, newRole: Role) => {
+    const updated = userDb.map(u => u.username === username ? { ...u, role: newRole } : u);
+    setUserDb(updated);
   };
 
   const generateInviteLink = () => {
@@ -178,7 +225,7 @@ const App = () => {
     <div className="flex flex-col h-full bg-slate-50 overflow-y-auto pb-40 animate-fade">
         <header className="px-8 pt-20 pb-8 bg-white border-b">
             <h1 className="text-4xl font-black text-blue-950 italic uppercase tracking-tighter">{t.ownerView}</h1>
-            <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Platform Oversight Panel</p>
+            <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Global Platform Oversight</p>
         </header>
         <div className="p-6 space-y-4">
             {userDb.filter(u => u.role === 'super').map(u => (
@@ -205,6 +252,38 @@ const App = () => {
                                 <div className="h-full bg-blue-600" style={{ width: `${(u.cloudConfig.usedSpaceGB/u.cloudConfig.totalSpaceGB)*100}%` }}></div>
                             </div>
                         </div>
+                    )}
+                </div>
+            ))}
+        </div>
+    </div>
+  );
+
+  const MemberManagement = () => (
+    <div className="flex flex-col h-full bg-slate-50 overflow-y-auto pb-40 animate-fade">
+        <header className="px-8 pt-20 pb-8 bg-white border-b">
+            <h1 className="text-4xl font-black text-blue-950 italic uppercase tracking-tighter">{t.members}</h1>
+            <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">{currentUser?.communityId} Roster</p>
+        </header>
+        <div className="p-6 space-y-3">
+            {userDb.filter(u => u.communityId === currentUser?.communityId && u.username !== currentUser.username).map(u => (
+                <div key={u.username} className="bg-white p-5 rounded-[2rem] flex items-center justify-between shadow-sm border border-slate-100">
+                    <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-white ${u.role === 'admin' ? 'bg-blue-600' : 'bg-slate-300'}`}>
+                            {u.username[0].toUpperCase()}
+                        </div>
+                        <div>
+                            <p className="font-black text-blue-950 uppercase italic text-sm">{u.username}</p>
+                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{u.role}</p>
+                        </div>
+                    </div>
+                    {currentUser?.role === 'super' && (
+                        <button 
+                            onClick={() => changeUserRole(u.username, u.role === 'admin' ? 'user' : 'admin')}
+                            className={`px-4 py-2 rounded-full text-[8px] font-black uppercase tracking-tighter transition-colors ${u.role === 'admin' ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
+                        >
+                            {u.role === 'admin' ? t.demote : t.promote}
+                        </button>
                     )}
                 </div>
             ))}
@@ -304,27 +383,44 @@ const App = () => {
                     <input value={loginU} onChange={e => setLoginU(e.target.value)} placeholder={t.username} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900" />
                     <input type="password" value={loginP} onChange={e => setLoginP(e.target.value)} placeholder={t.password} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900" />
                     <button type="submit" className="w-full py-7 bg-blue-950 text-white font-black rounded-full text-xl shadow-xl uppercase italic border-b-8 border-slate-700 active:translate-y-1">ENTER</button>
-                    <button onClick={() => setScreen('auth')} className="w-full py-4 text-slate-400 font-bold text-xs uppercase tracking-widest">{t.back}</button>
+                    <div className="flex justify-between px-2">
+                        <button type="button" onClick={() => setScreen('forgot_password')} className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t.forgotPassword}</button>
+                        <button type="button" onClick={() => setScreen('auth')} className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t.back}</button>
+                    </div>
+                </form>
+            </div>
+        )}
+
+        {screen === 'forgot_password' && (
+            <div className="flex flex-col h-full bg-white p-10 justify-center animate-slide">
+                <h2 className="text-[32px] font-black text-blue-950 mb-10 tracking-tighter uppercase italic text-center">RECOVERY</h2>
+                <form onSubmit={simulateForgotPassword} className="space-y-4">
+                    <p className="text-xs text-slate-400 font-bold uppercase text-center mb-4 px-4">Enter your registered email to receive a recovery link.</p>
+                    <input type="email" value={recoveryEmail} onChange={e => setRecoveryEmail(e.target.value)} placeholder="your@email.com" className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900" required />
+                    <button type="submit" className="w-full py-7 bg-blue-950 text-white font-black rounded-full text-xl shadow-xl uppercase italic border-b-8 border-slate-700 active:translate-y-1">SEND LINK</button>
+                    <button type="button" onClick={() => setScreen('login_form')} className="w-full py-4 text-slate-400 font-bold text-xs uppercase tracking-widest text-center">{t.back}</button>
                 </form>
             </div>
         )}
 
         {screen === 'register_form' && (
-            <div className="flex flex-col h-full bg-white p-10 justify-center animate-slide">
+            <div className="flex flex-col h-full bg-white p-10 justify-center animate-slide overflow-y-auto hide-scrollbar">
                 <h2 className="text-[38px] font-black text-blue-950 mb-10 tracking-tighter uppercase italic text-center">{t.register}</h2>
                 <form onSubmit={handleRegister} className="space-y-4">
-                    <input value={regU} onChange={e => setRegU(e.target.value)} placeholder={t.username} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 shadow-inner" />
-                    <input type="password" value={regP} onChange={e => setRegP(e.target.value)} placeholder={t.password} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 shadow-inner" />
+                    <input value={regU} onChange={e => setRegU(e.target.value)} placeholder={t.username} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 shadow-inner" required />
+                    <input type="email" value={regE} onChange={e => setRegE(e.target.value)} placeholder="Email Address" className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 shadow-inner" required />
+                    <input type="password" value={regP} onChange={e => setRegP(e.target.value)} placeholder={t.password} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 shadow-inner" required />
                     <input value={regI} onChange={e => setRegI(e.target.value)} placeholder={t.inviteCode} className="w-full bg-lime-50 p-6 rounded-2xl font-black outline-none border-2 border-lime-400 shadow-inner italic" />
                     <p className="text-[10px] font-bold text-slate-400 uppercase text-center px-4">Master Keys for Super Admin, or Invite Code for Members.</p>
                     <button type="submit" className="w-full py-7 bg-[#A3E635] text-blue-950 font-black rounded-full text-xl shadow-xl uppercase italic border-b-8 border-lime-600 active:translate-y-1">REGISTER</button>
-                    <button onClick={() => setScreen('auth')} className="w-full py-4 text-slate-400 font-bold text-xs uppercase tracking-widest">{t.back}</button>
+                    <button onClick={() => setScreen('auth')} className="w-full py-4 text-slate-400 font-bold text-xs uppercase tracking-widest text-center">{t.back}</button>
                 </form>
             </div>
         )}
 
         {screen === 'cloud_setup' && <CloudHandshakeScreen />}
         {screen === 'owner_dashboard' && <OwnerDashboard />}
+        {screen === 'members' && <MemberManagement />}
         
         {screen === 'settings' && (
             <div className="flex flex-col h-full bg-slate-50 overflow-y-auto pb-40 animate-fade">
@@ -333,20 +429,41 @@ const App = () => {
                     <button className="text-[10px] font-black bg-slate-100 px-3 py-1.5 rounded-full uppercase" onClick={() => setLang(lang === 'cn' ? 'en' : 'cn')}>{lang.toUpperCase()}</button>
                 </header>
                 <div className="p-8 space-y-6">
-                    <div className="bg-white rounded-[3rem] p-8 shadow-xl border border-slate-100 text-center">
+                    <div className="bg-white rounded-[3rem] p-8 shadow-xl border border-slate-100 text-center relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4">
+                           <span className="text-[8px] font-black bg-lime-400 px-2 py-1 rounded-full uppercase italic">{currentUser?.role}</span>
+                        </div>
                         <div className="w-24 h-24 rounded-3xl bg-[#A3E635] mx-auto flex items-center justify-center text-4xl shadow-lg mb-6 border-b-4 border-lime-600">🎾</div>
                         <h3 className="text-2xl font-black text-blue-950 italic uppercase">{currentUser?.username}</h3>
-                        <p className="text-[10px] font-black text-lime-600 uppercase tracking-widest">{currentUser?.role} @ {currentUser?.communityId}</p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">{currentUser?.email}</p>
+                        
+                        {/* Email Verification Banner */}
+                        {!currentUser?.isVerified && currentUser?.role !== 'owner' ? (
+                            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex flex-col items-center gap-2">
+                                <span className="text-[9px] font-black text-amber-700 uppercase tracking-widest">Email Not Verified</span>
+                                <button onClick={simulateVerifyEmail} className="text-[10px] font-black bg-amber-600 text-white px-4 py-2 rounded-full uppercase italic">{t.verifyEmail}</button>
+                            </div>
+                        ) : (
+                            <div className="flex items-center justify-center gap-1">
+                                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                                <span className="text-[9px] font-black text-green-600 uppercase tracking-widest">{t.emailVerified}</span>
+                            </div>
+                        )}
                     </div>
 
-                    <div className="bg-blue-950 rounded-[2.5rem] p-8 text-white shadow-2xl space-y-4">
-                        <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60">Invite Management</h4>
-                        <div className="bg-white/10 p-4 rounded-2xl border border-white/5">
-                            <p className="text-[8px] font-black uppercase opacity-40 mb-1">Your Personal Invite Code</p>
-                            <p className="text-xl font-black italic tracking-widest">{currentUser?.inviteCode || 'N/A'}</p>
+                    {(currentUser?.role === 'super' || currentUser?.role === 'admin') && (
+                        <div className="bg-blue-950 rounded-[2.5rem] p-8 text-white shadow-2xl space-y-4">
+                            <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60">Invite & Management</h4>
+                            <div className="bg-white/10 p-4 rounded-2xl border border-white/5">
+                                <p className="text-[8px] font-black uppercase opacity-40 mb-1">Your Personal Invite Code</p>
+                                <p className="text-xl font-black italic tracking-widest">{currentUser?.inviteCode || 'N/A'}</p>
+                            </div>
+                            <button onClick={generateInviteLink} className="w-full py-4 bg-lime-400 text-blue-950 rounded-2xl font-black uppercase text-xs shadow-lg">{t.shareInvite}</button>
+                            {currentUser?.role === 'super' && (
+                                <button onClick={() => setScreen('cloud_setup')} className="w-full py-4 bg-white/10 text-white rounded-2xl font-black uppercase text-xs border border-white/20">Update Cloud Connection</button>
+                            )}
                         </div>
-                        <button onClick={generateInviteLink} className="w-full py-4 bg-lime-400 text-blue-950 rounded-2xl font-black uppercase text-xs shadow-lg">{t.shareInvite}</button>
-                    </div>
+                    )}
 
                     {currentUser?.cloudConfig?.connected && (
                         <div className="bg-white rounded-[2.5rem] p-6 shadow-lg border border-slate-100">
@@ -377,7 +494,7 @@ const App = () => {
         )}
 
         {/* Navigation Bar */}
-        {['albums', 'owner_dashboard', 'settings'].includes(screen) && (
+        {['albums', 'owner_dashboard', 'settings', 'members'].includes(screen) && (
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-[94%] bg-blue-950/98 backdrop-blur-3xl rounded-[4rem] flex items-center justify-around py-8 px-6 shadow-2xl border border-white/10 z-50">
             {currentUser?.role === 'owner' ? (
                 <button onClick={() => setScreen('owner_dashboard')} className={`flex flex-col items-center ${screen === 'owner_dashboard' ? 'text-lime-400' : 'text-slate-500'}`}>
@@ -385,10 +502,18 @@ const App = () => {
                     <span className="text-[8px] font-black uppercase tracking-widest mt-1">Admin</span>
                 </button>
             ) : (
-                <button onClick={() => setScreen('albums')} className={`flex flex-col items-center ${screen === 'albums' ? 'text-lime-400' : 'text-slate-500'}`}>
-                    <div className="text-2xl">📂</div>
-                    <span className="text-[8px] font-black uppercase tracking-widest mt-1">Albums</span>
-                </button>
+                <>
+                    <button onClick={() => setScreen('albums')} className={`flex flex-col items-center ${screen === 'albums' ? 'text-lime-400' : 'text-slate-500'}`}>
+                        <div className="text-2xl">📂</div>
+                        <span className="text-[8px] font-black uppercase tracking-widest mt-1">Albums</span>
+                    </button>
+                    {(currentUser?.role === 'super' || currentUser?.role === 'admin') && (
+                        <button onClick={() => setScreen('members')} className={`flex flex-col items-center ${screen === 'members' ? 'text-lime-400' : 'text-slate-500'}`}>
+                            <div className="text-2xl">👥</div>
+                            <span className="text-[8px] font-black uppercase tracking-widest mt-1">Users</span>
+                        </button>
+                    )}
+                </>
             )}
             <button onClick={() => setScreen('settings')} className={`flex flex-col items-center ${screen === 'settings' ? 'text-lime-400' : 'text-slate-500'}`}>
                 <div className="text-2xl">👤</div>
@@ -404,6 +529,9 @@ const App = () => {
                 <p className="text-slate-400 font-bold text-xs uppercase tracking-widest leading-loose">
                     Your community drive is ready.<br/>Start uploading highlights to the cloud drive!
                 </p>
+                <div className="mt-8 flex gap-2">
+                    <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-3 py-1 rounded-full uppercase">{currentUser?.role} Status</span>
+                </div>
             </div>
         )}
       </div>
