@@ -2,7 +2,71 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 
-// Pre-configured Super Admin Keys
+// --- BACKEND SERVICE SIMULATION ---
+// This class encapsulates the logic that would normally happen on a Node.js/Python server.
+class BackendService {
+  private static STORAGE_KEY = 'ace_users_v3';
+
+  static getUsers(): User[] {
+    const saved = localStorage.getItem(this.STORAGE_KEY);
+    const users = saved ? JSON.parse(saved) : [];
+    if (!users.find((u: any) => u.username === APP_OWNER_USER.username)) {
+      users.push(APP_OWNER_USER);
+    }
+    return users;
+  }
+
+  static saveUsers(users: User[]) {
+    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(users));
+  }
+
+  // Mimics sending an email by logging to console and returning a "Token"
+  static async sendEmail(email: string, type: 'VERIFY' | 'RECOVERY'): Promise<string> {
+    console.log(`[BACKEND] Sending ${type} email to: ${email}`);
+    // Simulate network delay
+    await new Promise(r => setTimeout(r, 1200));
+    
+    // Create a mock JWT (Base64 encoded string)
+    const tokenPayload = { email, type, expires: Date.now() + 3600000 };
+    return btoa(JSON.stringify(tokenPayload));
+  }
+
+  static async resetPassword(token: string, newPassword: string): Promise<boolean> {
+    try {
+      const payload = JSON.parse(atob(token));
+      if (payload.type !== 'RECOVERY' || payload.expires < Date.now()) return false;
+      
+      const users = this.getUsers();
+      const userIndex = users.findIndex(u => u.email === payload.email);
+      if (userIndex === -1) return false;
+      
+      users[userIndex].password = newPassword;
+      this.saveUsers(users);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static async verifyEmail(token: string): Promise<boolean> {
+    try {
+      const payload = JSON.parse(atob(token));
+      if (payload.type !== 'VERIFY') return false;
+      
+      const users = this.getUsers();
+      const userIndex = users.findIndex(u => u.email === payload.email);
+      if (userIndex === -1) return false;
+      
+      users[userIndex].isVerified = true;
+      this.saveUsers(users);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+}
+
+// --- CONSTANTS ---
 const MASTER_KEYS = ['ACE-7788', 'ACE-9922', 'ACE-1155', 'ACE-3344', 'ACE-5566'];
 
 type CloudProvider = 'Baidu' | 'Weiyun' | 'Aliyun' | 'Google' | 'OneDrive' | 'Dropbox' | 'None';
@@ -15,7 +79,6 @@ interface CloudConfig {
   lastSync: number;
 }
 
-// Localized Strings
 const TRANSLATIONS = {
   en: {
     appName: "AceLine",
@@ -49,7 +112,8 @@ const TRANSLATIONS = {
     forgotPassword: "Forgot Password?",
     recoverySent: "Recovery link sent to your email",
     verifySent: "Verification email sent!",
-    resend: "Resend"
+    resend: "Resend",
+    resetSuccess: "Password reset successful!"
   },
   cn: {
     appName: "网球相册 AceLine",
@@ -83,7 +147,8 @@ const TRANSLATIONS = {
     forgotPassword: "忘记密码？",
     recoverySent: "密码重置链接已发送至邮箱",
     verifySent: "验证邮件已发送！",
-    resend: "重新发送"
+    resend: "重新发送",
+    resetSuccess: "密码修改成功！"
   }
 };
 
@@ -97,7 +162,7 @@ const TennisBallIcon = ({ className = "w-16 h-16" }) => (
 );
 
 type Role = 'user' | 'admin' | 'super' | 'owner';
-type Screen = 'auth' | 'login_form' | 'register_form' | 'albums' | 'settings' | 'members' | 'gallery_view' | 'owner_dashboard' | 'cloud_setup' | 'forgot_password';
+type Screen = 'auth' | 'login_form' | 'register_form' | 'albums' | 'settings' | 'members' | 'gallery_view' | 'owner_dashboard' | 'cloud_setup' | 'forgot_password' | 'reset_password';
 
 interface User {
   username: string;
@@ -135,28 +200,43 @@ const App = () => {
   const [loginU, setLoginU] = useState('');
   const [loginP, setLoginP] = useState('');
   const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [activeToken, setActiveToken] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
   
-  // Registration / Invite logic
   const [regU, setRegU] = useState('');
   const [regP, setRegP] = useState('');
   const [regE, setRegE] = useState('');
   const [regI, setRegI] = useState('');
 
-  const [userDb, setUserDb] = useState<User[]>(() => {
-    const saved = localStorage.getItem('ace_users_v3');
-    let users = saved ? JSON.parse(saved) : [];
-    if (!users.find((u:any) => u.username === APP_OWNER_USER.username)) users.push(APP_OWNER_USER);
-    return users;
-  });
+  const [userDb, setUserDb] = useState<User[]>(() => BackendService.getUsers());
 
   useEffect(() => {
-    localStorage.setItem('ace_users_v3', JSON.stringify(userDb));
+    BackendService.saveUsers(userDb);
     
-    // Auto-parse invite code from URL
+    // Listen for mock verification links in the URL (simulating email click)
     const params = new URLSearchParams(window.location.search);
-    const code = params.get('inviteCode');
-    if (code) {
-        setRegI(code);
+    const verifyToken = params.get('verifyToken');
+    const recoveryToken = params.get('recoveryToken');
+    const inviteCode = params.get('inviteCode');
+
+    if (verifyToken) {
+      BackendService.verifyEmail(verifyToken).then(success => {
+        if (success) {
+          alert("Email verified successfully! You can now log in.");
+          setUserDb(BackendService.getUsers());
+          setScreen('login_form');
+        }
+      });
+    }
+
+    if (recoveryToken) {
+      setActiveToken(recoveryToken);
+      setScreen('reset_password');
+    }
+
+    if (inviteCode && !verifyToken && !recoveryToken) {
+        setRegI(inviteCode);
         setScreen('register_form');
     }
   }, [userDb]);
@@ -181,32 +261,46 @@ const App = () => {
     const newUser: User = {
         username: regU,
         password: regP,
-        email: regE || `${regU}@example.com`,
+        email: regE,
         isVerified: false,
         role: isMasterKey ? 'super' : 'user',
         communityId: targetCid,
         inviteCode: Math.random().toString(36).substr(2, 8).toUpperCase()
     };
-    setUserDb([...userDb, newUser]);
+    const updatedDb = [...userDb, newUser];
+    setUserDb(updatedDb);
     setCurrentUser(newUser);
+    
+    // Immediately trigger "Backend" to send verification email
+    BackendService.sendEmail(regE, 'VERIFY').then(token => {
+      console.log(`[DEV ONLY] Verification Link: ${window.location.origin}${window.location.pathname}?verifyToken=${token}`);
+    });
+
     setScreen(newUser.role === 'super' ? 'cloud_setup' : 'albums');
   };
 
-  const simulateVerifyEmail = () => {
-    if (!currentUser) return;
-    alert(t.verifySent);
-    // Simulate real verification after 2 seconds
-    setTimeout(() => {
-        const updated = userDb.map(u => u.username === currentUser.username ? { ...u, isVerified: true } : u);
-        setUserDb(updated);
-        setCurrentUser({ ...currentUser, isVerified: true });
-    }, 2000);
-  };
-
-  const simulateForgotPassword = (e: React.FormEvent) => {
+  const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsProcessing(true);
+    const token = await BackendService.sendEmail(recoveryEmail, 'RECOVERY');
+    console.log(`[DEV ONLY] Recovery Link: ${window.location.origin}${window.location.pathname}?recoveryToken=${token}`);
+    setIsProcessing(false);
     alert(t.recoverySent);
     setScreen('login_form');
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsProcessing(true);
+    const success = await BackendService.resetPassword(activeToken, newPassword);
+    setIsProcessing(false);
+    if (success) {
+      alert(t.resetSuccess);
+      setUserDb(BackendService.getUsers());
+      setScreen('login_form');
+    } else {
+      alert("Invalid or expired token.");
+    }
   };
 
   const changeUserRole = (username: string, newRole: Role) => {
@@ -394,10 +488,25 @@ const App = () => {
         {screen === 'forgot_password' && (
             <div className="flex flex-col h-full bg-white p-10 justify-center animate-slide">
                 <h2 className="text-[32px] font-black text-blue-950 mb-10 tracking-tighter uppercase italic text-center">RECOVERY</h2>
-                <form onSubmit={simulateForgotPassword} className="space-y-4">
+                <form onSubmit={handleForgotPassword} className="space-y-4">
                     <p className="text-xs text-slate-400 font-bold uppercase text-center mb-4 px-4">Enter your registered email to receive a recovery link.</p>
                     <input type="email" value={recoveryEmail} onChange={e => setRecoveryEmail(e.target.value)} placeholder="your@email.com" className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900" required />
-                    <button type="submit" className="w-full py-7 bg-blue-950 text-white font-black rounded-full text-xl shadow-xl uppercase italic border-b-8 border-slate-700 active:translate-y-1">SEND LINK</button>
+                    <button type="submit" disabled={isProcessing} className="w-full py-7 bg-blue-950 text-white font-black rounded-full text-xl shadow-xl uppercase italic border-b-8 border-slate-700 active:translate-y-1">
+                        {isProcessing ? 'SENDING...' : 'SEND LINK'}
+                    </button>
+                    <button type="button" onClick={() => setScreen('login_form')} className="w-full py-4 text-slate-400 font-bold text-xs uppercase tracking-widest text-center">{t.back}</button>
+                </form>
+            </div>
+        )}
+
+        {screen === 'reset_password' && (
+            <div className="flex flex-col h-full bg-white p-10 justify-center animate-slide">
+                <h2 className="text-[32px] font-black text-blue-950 mb-10 tracking-tighter uppercase italic text-center">NEW PASSWORD</h2>
+                <form onSubmit={handleResetPassword} className="space-y-4">
+                    <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New Password" className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900" required />
+                    <button type="submit" disabled={isProcessing} className="w-full py-7 bg-blue-950 text-white font-black rounded-full text-xl shadow-xl uppercase italic border-b-8 border-slate-700 active:translate-y-1">
+                        {isProcessing ? 'UPDATING...' : 'RESET PASSWORD'}
+                    </button>
                     <button type="button" onClick={() => setScreen('login_form')} className="w-full py-4 text-slate-400 font-bold text-xs uppercase tracking-widest text-center">{t.back}</button>
                 </form>
             </div>
@@ -437,11 +546,15 @@ const App = () => {
                         <h3 className="text-2xl font-black text-blue-950 italic uppercase">{currentUser?.username}</h3>
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">{currentUser?.email}</p>
                         
-                        {/* Email Verification Banner */}
                         {!currentUser?.isVerified && currentUser?.role !== 'owner' ? (
                             <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex flex-col items-center gap-2">
                                 <span className="text-[9px] font-black text-amber-700 uppercase tracking-widest">Email Not Verified</span>
-                                <button onClick={simulateVerifyEmail} className="text-[10px] font-black bg-amber-600 text-white px-4 py-2 rounded-full uppercase italic">{t.verifyEmail}</button>
+                                <button onClick={() => {
+                                  BackendService.sendEmail(currentUser!.email, 'VERIFY').then(t => {
+                                    console.log(`[DEV] Verification Link: ${window.location.origin}${window.location.pathname}?verifyToken=${t}`);
+                                    alert(TRANSLATIONS[lang].verifySent);
+                                  });
+                                }} className="text-[10px] font-black bg-amber-600 text-white px-4 py-2 rounded-full uppercase italic">{t.verifyEmail}</button>
                             </div>
                         ) : (
                             <div className="flex items-center justify-center gap-1">
