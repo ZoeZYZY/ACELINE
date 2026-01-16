@@ -17,7 +17,7 @@ AceLine now uses a **Decentralized Cloud Storage** model. Instead of a shared 10
 
 | Role | Permissions | Acquisition |
 | :--- | :--- | :--- |
-| **App Owner** (平台主) | Global oversight of all Super Admins & Communities | Fixed system account (`Zoe Zhou`) |
+| **App Owner** (平台主) | Global oversight of all Super Admins & Communities | Fixed system account  |
 | **Super Admin** (超级管理员) | Create community, **Handshake Cloud Storage**, Manage Admins & Members | Registered via **Master Secret** |
 | **Admin** (管理员) | Manage albums, invite members, moderate content | Appointed by Super Admin |
 | **Member** (正式成员) | Browse albums, upload photos to community cloud | Invited via **Invite Link/Code** |
@@ -58,7 +58,7 @@ AceLine features an automated **Deep Link** invitation system:
 ## 6. Pre-set Master Secrets | 预设超级管理密钥
 
 The following keys initialize a new Super Admin account:
-- `ACE-7788`, `ACE-9922`, `ACE-1155`, `ACE-3344`, `ACE-5566`
+- 
 
 ---
 *AceLine - Relive Every Match Point.*
