@@ -156,6 +156,11 @@ const App = () => {
   const [regMode, setRegMode] = useState<'create' | 'join'>('join');
   const [filterMode, setFilterMode] = useState<'all' | 'mine'>('all');
   
+  // Login Form States
+  const [loginU, setLoginU] = useState('');
+  const [loginP, setLoginP] = useState('');
+  const [showP, setShowP] = useState(false);
+
   const [userDb, setUserDb] = useState<User[]>(() => {
       const saved = localStorage.getItem('ace_users');
       const users: User[] = saved ? JSON.parse(saved) : [];
@@ -399,6 +404,20 @@ const App = () => {
 
   const isManagementView = currentUser?.role && ['super', 'admin', 'owner'].includes(currentUser.role);
 
+  const handleLogin = () => {
+      if (!loginU || !loginP) return alert(t.required);
+      const found = userDb.find(user => (user.username === loginU || user.email === loginU) && user.password === loginP);
+      if (found) { 
+          setCurrentUser(found); 
+          setScreen('albums');
+          // Clear form
+          setLoginU('');
+          setLoginP('');
+      } else {
+          alert("Invalid credentials.");
+      }
+  };
+
   return (
     <div className="h-screen w-full flex flex-col items-center justify-center bg-[#CBD5E1]">
       <div className="w-full max-w-md h-full bg-white overflow-hidden flex flex-col shadow-2xl relative">
@@ -418,15 +437,16 @@ const App = () => {
                 <TennisBallIcon className="w-14 h-14 mb-8 self-center" />
                 <h2 className="text-[38px] font-black text-[#1E293B] mb-10 tracking-tighter uppercase italic text-center leading-none">LOGIN</h2>
                 <div className="space-y-4">
-                    <input id="login-u" placeholder={t.username} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all" />
-                    <input id="login-p" type="password" placeholder={t.password} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all" />
-                    <button onClick={() => {
-                        const u = (document.getElementById('login-u') as HTMLInputElement).value;
-                        const p = (document.getElementById('login-p') as HTMLInputElement).value;
-                        if (!u || !p) return alert(t.required);
-                        const found = userDb.find(user => (user.username === u || user.email === u) && user.password === p);
-                        if (found) { setCurrentUser(found); setScreen('albums'); } else alert("Invalid credentials.");
-                    }} className="w-full py-7 bg-[#A3E635] text-blue-950 font-black rounded-full text-xl shadow-xl mt-4 uppercase italic tracking-tighter border-b-8 border-lime-600 active:translate-y-1">{t.login}</button>
+                    <div className="relative">
+                        <input value={loginU} onChange={e => setLoginU(e.target.value)} placeholder={t.username} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all" />
+                    </div>
+                    <div className="relative flex items-center">
+                        <input type={showP ? "text" : "password"} value={loginP} onChange={e => setLoginP(e.target.value)} placeholder={t.password} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all pr-14" />
+                        <button onClick={() => setShowP(!showP)} className="absolute right-5 text-xl opacity-40 focus:opacity-100 transition-opacity">
+                            {showP ? "👁️" : "🫣"}
+                        </button>
+                    </div>
+                    <button onClick={handleLogin} className="w-full py-7 bg-[#A3E635] text-blue-950 font-black rounded-full text-xl shadow-xl mt-4 uppercase italic tracking-tighter border-b-8 border-lime-600 active:translate-y-1">{t.login}</button>
                     <button onClick={() => setScreen('auth')} className="w-full py-4 text-slate-400 font-bold text-xs uppercase text-center tracking-widest">{t.back}</button>
                 </div>
             </div>
