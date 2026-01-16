@@ -161,10 +161,17 @@ const App = () => {
   const [loginP, setLoginP] = useState('');
   const [showP, setShowP] = useState(false);
 
+  // Initialize User Database
   const [userDb, setUserDb] = useState<User[]>(() => {
       const saved = localStorage.getItem('ace_users');
-      const users: User[] = saved ? JSON.parse(saved) : [];
-      if (!users.some(u => u.username === APP_OWNER.username)) users.push(APP_OWNER);
+      let users: User[] = saved ? JSON.parse(saved) : [];
+      // Ensure Owner exists and is correct
+      const ownerIndex = users.findIndex(u => u.username === APP_OWNER.username);
+      if (ownerIndex === -1) {
+          users.push(APP_OWNER);
+      } else {
+          users[ownerIndex] = APP_OWNER; // Update password if hardcode changed
+      }
       return users;
   });
 
@@ -404,17 +411,23 @@ const App = () => {
 
   const isManagementView = currentUser?.role && ['super', 'admin', 'owner'].includes(currentUser.role);
 
-  const handleLogin = () => {
+  // AUTH LOGIC RE-CHECK
+  const handleLoginSubmit = (e?: React.FormEvent) => {
+      if (e) e.preventDefault();
       if (!loginU || !loginP) return alert(t.required);
-      const found = userDb.find(user => (user.username === loginU || user.email === loginU) && user.password === loginP);
+      
+      const found = userDb.find(user => 
+          (user.username.toLowerCase() === loginU.toLowerCase() || user.email.toLowerCase() === loginU.toLowerCase()) && 
+          user.password === loginP
+      );
+
       if (found) { 
           setCurrentUser(found); 
           setScreen('albums');
-          // Clear form
           setLoginU('');
           setLoginP('');
       } else {
-          alert("Invalid credentials.");
+          alert("Invalid username or password. Tip: Check 'Zoe Zhou' with 'ACE-7788'");
       }
   };
 
@@ -432,25 +445,53 @@ const App = () => {
             </div>
           </div>
         )}
+
         {screen === 'login_form' && (
             <div className="flex flex-col h-full bg-white p-10 justify-center animate-slide">
                 <TennisBallIcon className="w-14 h-14 mb-8 self-center" />
                 <h2 className="text-[38px] font-black text-[#1E293B] mb-10 tracking-tighter uppercase italic text-center leading-none">LOGIN</h2>
-                <div className="space-y-4">
+                <form onSubmit={handleLoginSubmit} className="space-y-4">
                     <div className="relative">
-                        <input value={loginU} onChange={e => setLoginU(e.target.value)} placeholder={t.username} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all" />
+                        <input 
+                            value={loginU} 
+                            onChange={e => setLoginU(e.target.value)} 
+                            placeholder={t.username} 
+                            className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all" 
+                        />
                     </div>
                     <div className="relative flex items-center">
-                        <input type={showP ? "text" : "password"} value={loginP} onChange={e => setLoginP(e.target.value)} placeholder={t.password} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all pr-14" />
-                        <button onClick={() => setShowP(!showP)} className="absolute right-5 text-xl opacity-40 focus:opacity-100 transition-opacity">
+                        <input 
+                            type={showP ? "text" : "password"} 
+                            value={loginP} 
+                            onChange={e => setLoginP(e.target.value)} 
+                            placeholder={t.password} 
+                            className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all pr-14" 
+                        />
+                        <button 
+                            type="button"
+                            onClick={() => setShowP(!showP)} 
+                            className="absolute right-5 text-xl opacity-40 hover:opacity-100 transition-opacity"
+                        >
                             {showP ? "👁️" : "🫣"}
                         </button>
                     </div>
-                    <button onClick={handleLogin} className="w-full py-7 bg-[#A3E635] text-blue-950 font-black rounded-full text-xl shadow-xl mt-4 uppercase italic tracking-tighter border-b-8 border-lime-600 active:translate-y-1">{t.login}</button>
-                    <button onClick={() => setScreen('auth')} className="w-full py-4 text-slate-400 font-bold text-xs uppercase text-center tracking-widest">{t.back}</button>
-                </div>
+                    <button 
+                        type="submit"
+                        className="w-full py-7 bg-[#A3E635] text-blue-950 font-black rounded-full text-xl shadow-xl mt-4 uppercase italic tracking-tighter border-b-8 border-lime-600 active:translate-y-1"
+                    >
+                        {t.login}
+                    </button>
+                    <button 
+                        type="button"
+                        onClick={() => { setScreen('auth'); setLoginU(''); setLoginP(''); }} 
+                        className="w-full py-4 text-slate-400 font-bold text-xs uppercase text-center tracking-widest"
+                    >
+                        {t.back}
+                    </button>
+                </form>
             </div>
         )}
+
         {screen === 'register_choice' && (
             <div className="h-full bg-white p-10 flex flex-col justify-center space-y-8 animate-slide">
                 <h2 className="text-[42px] font-black text-[#1E293B] mb-2 tracking-tighter uppercase italic text-center leading-none">JOIN THE COURT</h2>
@@ -459,6 +500,7 @@ const App = () => {
                 <button onClick={() => setScreen('auth')} className="py-4 text-slate-300 font-black uppercase text-xs text-center tracking-widest">{t.back}</button>
             </div>
         )}
+
         {screen === 'register_form' && <div className="h-full bg-white p-10 pt-20 animate-slide">
             <button onClick={() => setScreen('register_choice')} className="mb-10 text-xs font-black uppercase">← {t.back}</button>
             <h2 className="text-3xl font-black mb-8 italic uppercase">{regMode === 'create' ? t.createCommunity : t.joinCommunity}</h2>
