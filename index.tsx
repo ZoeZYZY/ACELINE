@@ -162,20 +162,36 @@ const App = () => {
   const [loginP, setLoginP] = useState('');
   const [showP, setShowP] = useState(false);
 
+  // CRITICAL FIX: Direct atomic initialization to bypass any corrupted data in localStorage
   const [userDb, setUserDb] = useState<User[]>(() => {
+    try {
       const saved = localStorage.getItem('ace_users');
       let users: User[] = saved ? JSON.parse(saved) : [];
-      if (!users.some(u => u.username === APP_OWNER.username)) {
-          users.push(APP_OWNER);
-      } else {
-          // Always ensure APP_OWNER is up to date in DB
-          users = users.map(u => u.username === APP_OWNER.username ? APP_OWNER : u);
-      }
-      return users;
+      // If users is not an array (corrupted data), reset it
+      if (!Array.isArray(users)) users = [];
+      
+      // Force clean APP_OWNER - this is the "Kill Switch" for the white screen bug
+      const filtered = users.filter(u => u && u.username && u.username.toLowerCase() !== APP_OWNER.username.toLowerCase());
+      filtered.push({ ...APP_OWNER }); // Always use fresh copy
+      return filtered;
+    } catch (e) {
+      return [APP_OWNER];
+    }
   });
 
-  const [albums, setAlbums] = useState<Album[]>(() => JSON.parse(localStorage.getItem('ace_albums') || '[]'));
-  const [userLikes, setUserLikes] = useState<Record<string, string[]>>(() => JSON.parse(localStorage.getItem('ace_likes') || '{}'));
+  const [albums, setAlbums] = useState<Album[]>(() => {
+    try {
+      const saved = localStorage.getItem('ace_albums');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  
+  const [userLikes, setUserLikes] = useState<Record<string, string[]>>(() => {
+    try {
+      const saved = localStorage.getItem('ace_likes');
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
 
   useEffect(() => {
     localStorage.setItem('ace_users', JSON.stringify(userDb));
@@ -185,14 +201,22 @@ const App = () => {
 
   const t = TRANSLATIONS[lang];
   
+  // SAFE DERIVATION: Comprehensive null-checks for every property access
   const communityAlbums = useMemo(() => {
-    if (!currentUser) return [];
-    let list = currentUser.role === 'owner' ? albums : albums.filter(a => a.communityId === currentUser.communityId);
-    if (filterMode === 'mine') list = list.filter(a => a.owner === currentUser.username);
+    if (!currentUser || !currentUser.username) return [];
+    const albumsList = Array.isArray(albums) ? albums : [];
+    
+    let list = (currentUser.role === 'owner') 
+      ? albumsList 
+      : albumsList.filter(a => a && a.communityId === currentUser.communityId);
+      
+    if (filterMode === 'mine') {
+      list = list.filter(a => a && a.owner === currentUser.username);
+    }
     return list;
   }, [albums, currentUser, filterMode]);
 
-  const selectedAlbum = useMemo(() => albums.find(a => a.id === selectedAlbumId), [albums, selectedAlbumId]);
+  const selectedAlbum = useMemo(() => albums.find(a => a && a.id === selectedAlbumId), [albums, selectedAlbumId]);
 
   const handleLoginSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -200,13 +224,23 @@ const App = () => {
     const pInput = loginP.trim();
     if (!uInput || !pInput) return alert(t.required);
     
-    const found = userDb.find(u => 
+    // Hard check against static credentials for APP_OWNER to guarantee entry
+    const isOwner = (uInput.toLowerCase() === APP_OWNER.username.toLowerCase() || uInput.toLowerCase() === APP_OWNER.email.toLowerCase()) && pInput === APP_OWNER.password;
+    
+    const found = isOwner ? APP_OWNER : userDb.find(u => 
+        u && u.username && 
         (u.username.toLowerCase() === uInput.toLowerCase() || u.email.toLowerCase() === uInput.toLowerCase()) && 
         u.password === pInput
     );
 
     if (found) {
-        setCurrentUser(found);
+        // One last schema safety check
+        const safeUser: User = {
+          ...found,
+          role: found.role || 'user',
+          communityId: found.communityId || 'GLOBAL'
+        };
+        setCurrentUser(safeUser);
         setScreen('albums');
         setLoginU('');
         setLoginP('');
@@ -241,12 +275,13 @@ const App = () => {
 
     const handleUpload = () => {
         if(!n || !c) return alert(t.required);
+        if(!currentUser) return;
         const newAlbum: Album = {
             id: Math.random().toString(36).substr(2, 9),
             name: n, cover: c, desc: d, category: cat,
             createdAt: Date.now(),
-            owner: currentUser!.username,
-            communityId: currentUser!.communityId,
+            owner: currentUser.username,
+            communityId: currentUser.communityId,
             photos: []
         };
         setAlbums([newAlbum, ...albums]);
@@ -290,8 +325,8 @@ const App = () => {
                 <div className="flex items-center gap-4">
                     <button onClick={() => setScreen('albums')} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black">←</button>
                     <div>
-                        <h2 className="text-2xl font-black text-blue-950 tracking-tighter italic uppercase">{selectedAlbum.name}</h2>
-                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-[0.2em]">{selectedAlbum.photos.length} PHOTOS</p>
+                        <h2 className="text-2xl font-black text-blue-950 tracking-tighter italic uppercase leading-none">{selectedAlbum.name}</h2>
+                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">{selectedAlbum.photos.length} PHOTOS</p>
                     </div>
                 </div>
                 {(currentUser?.username === selectedAlbum.owner || currentUser?.role === 'owner') && (
@@ -339,7 +374,7 @@ const App = () => {
                 <h2 className="text-5xl font-black text-blue-950 tracking-tighter italic leading-none">{t.membersMgmt}</h2>
             </header>
             <div className="px-8 mt-8 space-y-4">
-                {userDb.filter(u => u.communityId === currentUser?.communityId || currentUser?.role === 'owner').map(u => (
+                {userDb.filter(u => u && (u.communityId === currentUser?.communityId || currentUser?.role === 'owner')).map(u => (
                     <div key={u.username} className="bg-slate-50 p-6 rounded-3xl flex justify-between items-center border border-slate-100">
                         <div>
                             <p className="font-black text-blue-950 italic">{u.username}</p>
@@ -358,8 +393,8 @@ const App = () => {
   const ProfileScreen = () => {
     if (!currentUser) return null;
     const userLikesArr = userLikes[currentUser.username] || [];
-    const likedAlbumsCount = albums.filter(a => userLikesArr.includes(a.id)).length;
-    const userUploadsCount = albums.filter(a => a.owner === currentUser.username).length;
+    const likedAlbumsCount = albums.filter(a => a && userLikesArr.includes(a.id)).length;
+    const userUploadsCount = albums.filter(a => a && a.owner === currentUser.username).length;
 
     return (
         <div className="flex flex-col h-full bg-slate-50 overflow-y-auto pb-48 animate-fade">
