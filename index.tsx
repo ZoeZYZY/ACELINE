@@ -53,7 +53,8 @@ const TRANSLATIONS = {
     successUpload: "Album created!",
     addPhotos: "Add Photos",
     download: "Download",
-    back: "Back"
+    back: "Back",
+    loginError: "Login failed. Please check credentials."
   },
   cn: {
     appName: "网球相册 AceLine",
@@ -102,7 +103,8 @@ const TRANSLATIONS = {
     successUpload: "相册创建成功！",
     addPhotos: "上传照片",
     download: "保存到本地",
-    back: "返回"
+    back: "返回",
+    loginError: "登录失败，请检查用户名和密码"
   }
 };
 
@@ -145,7 +147,7 @@ const APP_OWNER: User = {
     email: "zoezhou85@hotmail.com",
     role: "owner",
     communityId: "GLOBAL",
-    createdAt: Date.now()
+    createdAt: 1714560000000
 };
 
 const App = () => {
@@ -156,22 +158,17 @@ const App = () => {
   const [regMode, setRegMode] = useState<'create' | 'join'>('join');
   const [filterMode, setFilterMode] = useState<'all' | 'mine'>('all');
   
-  // Login Form States
   const [loginU, setLoginU] = useState('');
   const [loginP, setLoginP] = useState('');
   const [showP, setShowP] = useState(false);
 
-  // Initialize User Database
+  // Hardened Database initialization
   const [userDb, setUserDb] = useState<User[]>(() => {
       const saved = localStorage.getItem('ace_users');
       let users: User[] = saved ? JSON.parse(saved) : [];
-      // Ensure Owner exists and is correct
-      const ownerIndex = users.findIndex(u => u.username === APP_OWNER.username);
-      if (ownerIndex === -1) {
-          users.push(APP_OWNER);
-      } else {
-          users[ownerIndex] = APP_OWNER; // Update password if hardcode changed
-      }
+      // Force refresh App Owner to prevent old cached object corruption
+      users = users.filter(u => u.username.toLowerCase() !== APP_OWNER.username.toLowerCase());
+      users.push(APP_OWNER);
       return users;
   });
 
@@ -186,13 +183,40 @@ const App = () => {
 
   const t = TRANSLATIONS[lang];
   
+  // Safe derivation of community list
   const communityAlbums = useMemo(() => {
-    let list = currentUser?.role === 'owner' ? albums : albums.filter(a => a.communityId === currentUser?.communityId);
-    if (filterMode === 'mine') list = list.filter(a => a.owner === currentUser?.username);
+    if (!currentUser) return [];
+    let list = currentUser.role === 'owner' ? albums : albums.filter(a => a.communityId === currentUser.communityId);
+    if (filterMode === 'mine') list = list.filter(a => a.owner === currentUser.username);
     return list;
   }, [albums, currentUser, filterMode]);
 
   const selectedAlbum = useMemo(() => albums.find(a => a.id === selectedAlbumId), [albums, selectedAlbumId]);
+
+  const handleLoginSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!loginU.trim() || !loginP.trim()) return alert(t.required);
+    
+    // Normalize input for comparison
+    const searchU = loginU.trim().toLowerCase();
+    const searchP = loginP.trim();
+
+    const found = userDb.find(u => 
+        (u.username.toLowerCase() === searchU || u.email.toLowerCase() === searchU) && 
+        u.password === searchP
+    );
+
+    if (found) {
+        // Atomic update to prevent partial render
+        setCurrentUser(found);
+        setScreen('albums');
+        setLoginU('');
+        setLoginP('');
+        setShowP(false);
+    } else {
+        alert(t.loginError);
+    }
+  };
 
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -216,13 +240,6 @@ const App = () => {
     const [d, setD] = useState('');
     const [cat, setCat] = useState('Match');
     const fileInputRef = useRef<HTMLInputElement>(null);
-
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const b64 = await fileToBase64(e.target.files[0]);
-            setC(b64);
-        }
-    };
 
     const handleUpload = () => {
         if(!n || !c) return alert(t.required);
@@ -250,7 +267,9 @@ const App = () => {
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">{t.coverUrl}*</label>
                     <div onClick={() => fileInputRef.current?.click()} className="w-full aspect-video bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer overflow-hidden group">
                         {c ? <img src={c} className="w-full h-full object-cover" /> : <div className="text-center"><span className="text-3xl">📷</span><p className="text-[10px] font-bold text-slate-400 mt-2">TAP TO SELECT</p></div>}
-                        <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                        <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={async (e) => {
+                            if (e.target.files?.[0]) setC(await fileToBase64(e.target.files[0]));
+                        }} />
                     </div>
                 </div>
                 <div className="space-y-2">
@@ -267,14 +286,6 @@ const App = () => {
     const photoInputRef = useRef<HTMLInputElement>(null);
     if (!selectedAlbum) return null;
 
-    const handleAddPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            const files = Array.from(e.target.files) as File[];
-            const newPhotos = await Promise.all(files.map(file => fileToBase64(file)));
-            setAlbums(prev => prev.map(a => a.id === selectedAlbumId ? { ...a, photos: [...a.photos, ...newPhotos] } : a));
-        }
-    };
-
     return (
         <div className="flex flex-col h-full bg-white animate-fade overflow-y-auto pb-48">
             <header className="px-8 pt-16 pb-6 bg-white/90 backdrop-blur-md sticky top-0 z-20 border-b flex justify-between items-center">
@@ -288,7 +299,12 @@ const App = () => {
                 {(currentUser?.username === selectedAlbum.owner || currentUser?.role === 'owner') && (
                     <button onClick={() => photoInputRef.current?.click()} className="bg-blue-950 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
                         {t.addPhotos}
-                        <input type="file" multiple accept="image/*" ref={photoInputRef} className="hidden" onChange={handleAddPhotos} />
+                        <input type="file" multiple accept="image/*" ref={photoInputRef} className="hidden" onChange={async (e) => {
+                            if (e.target.files) {
+                                const newPhotos = await Promise.all(Array.from(e.target.files).map(f => fileToBase64(f)));
+                                setAlbums(prev => prev.map(a => a.id === selectedAlbumId ? { ...a, photos: [...a.photos, ...newPhotos] } : a));
+                            }
+                        }} />
                     </button>
                 )}
             </header>
@@ -296,21 +312,21 @@ const App = () => {
                 {selectedAlbum.photos.map((p, i) => (
                     <div key={i} className="aspect-square bg-slate-100 relative group overflow-hidden">
                         <img src={p} className="w-full h-full object-cover" />
-                        <a href={p} download={`ace_photo_${i}.jpg`} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <a href={p} download={`ace_${selectedAlbum.name}_${i}.jpg`} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                             <span className="text-[10px] font-black text-white uppercase bg-blue-950/50 px-2 py-1 rounded">{t.download}</span>
                         </a>
                     </div>
                 ))}
             </div>
-            {selectedAlbum.photos.length === 0 && <div className="py-40 text-center opacity-20 font-black italic uppercase tracking-tighter">Empty Gallery</div>}
         </div>
     );
   };
 
   const ProfileScreen = () => {
-    const userLikesArr = userLikes[currentUser?.username || ""] || [];
-    const likedAlbums = albums.filter(a => userLikesArr.includes(a.id));
-    const userUploads = albums.filter(a => a.owner === currentUser?.username);
+    if (!currentUser) return null;
+    const userLikesArr = userLikes[currentUser.username] || [];
+    const likedAlbumsCount = albums.filter(a => userLikesArr.includes(a.id)).length;
+    const userUploadsCount = albums.filter(a => a.owner === currentUser.username).length;
 
     return (
         <div className="flex flex-col h-full bg-slate-50 overflow-y-auto pb-48 animate-fade">
@@ -321,21 +337,21 @@ const App = () => {
           <div className="p-8 space-y-6">
             <div className="bg-white rounded-[3.5rem] p-8 shadow-xl border border-slate-100">
                 <div className="flex items-center gap-5">
-                    <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-4xl shadow-xl border-b-4 ${currentUser?.role === 'owner' ? 'bg-black border-slate-800' : 'bg-[#A3E635] border-lime-600'}`}>
-                        {currentUser?.role === 'owner' ? "👑" : "🎾"}
+                    <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-4xl shadow-xl border-b-4 ${currentUser.role === 'owner' ? 'bg-black border-slate-800' : 'bg-[#A3E635] border-lime-600'}`}>
+                        {currentUser.role === 'owner' ? "👑" : "🎾"}
                     </div>
                     <div>
-                        <h3 className="text-2xl font-black text-blue-950 uppercase italic tracking-tighter">{currentUser?.username}</h3>
-                        <p className="text-[10px] font-black text-lime-600 uppercase tracking-widest">{currentUser?.role.toUpperCase()} @ {currentUser?.communityId}</p>
+                        <h3 className="text-2xl font-black text-blue-950 uppercase italic tracking-tighter leading-tight">{currentUser.username}</h3>
+                        <p className="text-[10px] font-black text-lime-600 uppercase tracking-widest mt-1">{currentUser.role.toUpperCase()} @ {currentUser.communityId}</p>
                     </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4 mt-8">
                     <button onClick={() => { setFilterMode('mine'); setScreen('albums'); }} className="bg-slate-50 p-6 rounded-[2rem] text-center border border-slate-100 active:bg-blue-950 active:text-white group transition-all">
-                        <p className="text-2xl font-black text-blue-950 italic group-active:text-white">{userUploads.length}</p>
+                        <p className="text-2xl font-black text-blue-950 italic group-active:text-white">{userUploadsCount}</p>
                         <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">{t.myUploads}</p>
                     </button>
                     <div className="bg-slate-50 p-6 rounded-[2rem] text-center border border-slate-100">
-                        <p className="text-2xl font-black text-blue-950 italic">{likedAlbums.length}</p>
+                        <p className="text-2xl font-black text-blue-950 italic">{likedAlbumsCount}</p>
                         <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">{t.favorites}</p>
                     </div>
                 </div>
@@ -347,17 +363,18 @@ const App = () => {
   };
 
   const AlbumsScreen = () => {
-    const currentLikes = userLikes[currentUser?.username || ""] || [];
+    if (!currentUser) return null;
+    const currentLikes = userLikes[currentUser.username] || [];
     return (
         <div className="flex flex-col h-full bg-white animate-fade overflow-y-auto pb-48">
           <header className="px-8 pt-16 pb-6 bg-white/90 backdrop-blur-md sticky top-0 z-20 border-b flex justify-between items-end">
             <div>
                 <p className="text-[10px] font-black text-lime-600 uppercase tracking-[0.4em] mb-2 italic">
-                    {filterMode === 'mine' ? t.myUploads : currentUser?.communityId}
+                    {filterMode === 'mine' ? t.myUploads : (currentUser.communityId || 'GLOBAL')}
                 </p>
                 <div className="flex items-center gap-2">
                     <h2 className="text-5xl font-black text-blue-950 tracking-tighter italic leading-none">{t.albums}</h2>
-                    {filterMode === 'mine' && <button onClick={() => setFilterMode('all')} className="bg-slate-100 text-[10px] font-black px-2 py-1 rounded-full uppercase ml-2">RESET</button>}
+                    {filterMode === 'mine' && <button onClick={() => setFilterMode('all')} className="bg-slate-100 text-[10px] font-black px-2 py-1 rounded-full uppercase ml-2 shadow-sm">RESET</button>}
                 </div>
             </div>
             <button onClick={() => setScreen('upload_form')} className="w-16 h-16 bg-[#A3E635] text-blue-950 rounded-3xl shadow-xl flex items-center justify-center text-4xl font-black border-b-4 border-lime-600 active:translate-y-1">+</button>
@@ -385,51 +402,7 @@ const App = () => {
       );
   };
 
-  const MembersScreen = () => {
-    return (
-        <div className="flex flex-col h-full bg-white animate-fade overflow-y-auto pb-48">
-            <header className="px-8 pt-16 pb-6 bg-white/90 backdrop-blur-md sticky top-0 z-20 border-b">
-                <p className="text-[10px] font-black text-lime-600 uppercase tracking-[0.4em] mb-2 italic">PLATFORM</p>
-                <h2 className="text-5xl font-black text-blue-950 tracking-tighter italic leading-none">{t.membersMgmt}</h2>
-            </header>
-            <div className="px-8 mt-8 space-y-4">
-                {userDb.filter(u => u.communityId === currentUser?.communityId || currentUser?.role === 'owner').map(u => (
-                    <div key={u.username} className="bg-slate-50 p-6 rounded-3xl flex justify-between items-center border border-slate-100">
-                        <div>
-                            <p className="font-black text-blue-950 italic">{u.username}</p>
-                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{u.role}</p>
-                        </div>
-                        {(currentUser?.role === 'owner' || currentUser?.role === 'super') && u.username !== currentUser?.username && (
-                            <button className="text-red-500 font-black text-[10px] uppercase">Kick</button>
-                        )}
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-  };
-
   const isManagementView = currentUser?.role && ['super', 'admin', 'owner'].includes(currentUser.role);
-
-  // AUTH LOGIC RE-CHECK
-  const handleLoginSubmit = (e?: React.FormEvent) => {
-      if (e) e.preventDefault();
-      if (!loginU || !loginP) return alert(t.required);
-      
-      const found = userDb.find(user => 
-          (user.username.toLowerCase() === loginU.toLowerCase() || user.email.toLowerCase() === loginU.toLowerCase()) && 
-          user.password === loginP
-      );
-
-      if (found) { 
-          setCurrentUser(found); 
-          setScreen('albums');
-          setLoginU('');
-          setLoginP('');
-      } else {
-          alert("Invalid username or password. Tip: Check 'Zoe Zhou' with 'ACE-7788'");
-      }
-  };
 
   return (
     <div className="h-screen w-full flex flex-col items-center justify-center bg-[#CBD5E1]">
@@ -452,40 +425,18 @@ const App = () => {
                 <h2 className="text-[38px] font-black text-[#1E293B] mb-10 tracking-tighter uppercase italic text-center leading-none">LOGIN</h2>
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                     <div className="relative">
-                        <input 
-                            value={loginU} 
-                            onChange={e => setLoginU(e.target.value)} 
-                            placeholder={t.username} 
-                            className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all" 
-                        />
+                        <input value={loginU} onChange={e => setLoginU(e.target.value)} placeholder={t.username} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all shadow-inner" />
                     </div>
                     <div className="relative flex items-center">
-                        <input 
-                            type={showP ? "text" : "password"} 
-                            value={loginP} 
-                            onChange={e => setLoginP(e.target.value)} 
-                            placeholder={t.password} 
-                            className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all pr-14" 
-                        />
-                        <button 
-                            type="button"
-                            onClick={() => setShowP(!showP)} 
-                            className="absolute right-5 text-xl opacity-40 hover:opacity-100 transition-opacity"
-                        >
+                        <input type={showP ? "text" : "password"} value={loginP} onChange={e => setLoginP(e.target.value)} placeholder={t.password} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all pr-14 shadow-inner" />
+                        <button type="button" onClick={() => setShowP(!showP)} className="absolute right-5 text-xl opacity-40 hover:opacity-100 transition-opacity">
                             {showP ? "👁️" : "🫣"}
                         </button>
                     </div>
-                    <button 
-                        type="submit"
-                        className="w-full py-7 bg-[#A3E635] text-blue-950 font-black rounded-full text-xl shadow-xl mt-4 uppercase italic tracking-tighter border-b-8 border-lime-600 active:translate-y-1"
-                    >
+                    <button type="submit" className="w-full py-7 bg-[#A3E635] text-blue-950 font-black rounded-full text-xl shadow-xl mt-4 uppercase italic tracking-tighter border-b-8 border-lime-600 active:translate-y-1">
                         {t.login}
                     </button>
-                    <button 
-                        type="button"
-                        onClick={() => { setScreen('auth'); setLoginU(''); setLoginP(''); }} 
-                        className="w-full py-4 text-slate-400 font-bold text-xs uppercase text-center tracking-widest"
-                    >
+                    <button type="button" onClick={() => { setScreen('auth'); setLoginU(''); setLoginP(''); }} className="w-full py-4 text-slate-400 font-bold text-xs uppercase text-center tracking-widest">
                         {t.back}
                     </button>
                 </form>
@@ -512,9 +463,7 @@ const App = () => {
                     const u = (document.getElementById('reg-u') as HTMLInputElement).value;
                     const p = (document.getElementById('reg-p') as HTMLInputElement).value;
                     const k = (document.getElementById('reg-key') as HTMLInputElement).value;
-                    
                     if(!u || !p || !k) return alert(t.required);
-                    
                     if(regMode === 'create') {
                         if(!MASTER_KEYS.includes(k)) return alert("Invalid Master Key");
                         const newUser: User = { username: u, password: p, email: '', role: 'owner', communityId: 'COMM-' + Math.floor(Math.random()*1000), createdAt: Date.now() };
@@ -532,14 +481,13 @@ const App = () => {
         {screen === 'gallery_view' && <GalleryView />}
         {screen === 'albums' && <AlbumsScreen />}
         {screen === 'settings' && <ProfileScreen />}
-        {screen === 'members' && <MembersScreen />}
         
-        {['albums', 'feed', 'sync', 'settings', 'members', 'keys_mgmt', 'upload_form', 'gallery_view'].includes(screen) && (
+        {['albums', 'settings', 'upload_form', 'gallery_view'].includes(screen) && (
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-[94%] bg-blue-950/98 backdrop-blur-3xl rounded-[4rem] flex items-center justify-around py-8 px-6 shadow-2xl border border-white/10 z-50 transition-transform">
             <button onClick={() => { setFilterMode('all'); setScreen('albums'); }} className={`flex flex-col items-center transition-all ${screen === 'albums' || screen === 'gallery_view' || screen === 'upload_form' ? 'text-lime-400' : 'text-slate-500'}`}><div className="text-3xl">📂</div><span className="text-[8px] font-black uppercase tracking-widest mt-1">{t.albums}</span></button>
-            <button onClick={() => setScreen(isManagementView ? 'members' : 'settings')} className={`flex flex-col items-center transition-all ${screen === 'members' || screen === 'settings' ? 'text-lime-400' : 'text-slate-500'}`}>
-                <div className="text-3xl">{isManagementView ? "👥" : "🛡️"}</div>
-                <span className="text-[8px] font-black uppercase tracking-widest mt-1">{isManagementView ? t.members : t.profile}</span>
+            <button onClick={() => setScreen('settings')} className={`flex flex-col items-center transition-all ${screen === 'settings' ? 'text-lime-400' : 'text-slate-500'}`}>
+                <div className="text-3xl">🛡️</div>
+                <span className="text-[8px] font-black uppercase tracking-widest mt-1">{t.profile}</span>
             </button>
             <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-xl text-white">🎾</div>
           </div>
