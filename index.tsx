@@ -162,13 +162,15 @@ const App = () => {
   const [loginP, setLoginP] = useState('');
   const [showP, setShowP] = useState(false);
 
-  // Hardened Database initialization
   const [userDb, setUserDb] = useState<User[]>(() => {
       const saved = localStorage.getItem('ace_users');
       let users: User[] = saved ? JSON.parse(saved) : [];
-      // Force refresh App Owner to prevent old cached object corruption
-      users = users.filter(u => u.username.toLowerCase() !== APP_OWNER.username.toLowerCase());
-      users.push(APP_OWNER);
+      if (!users.some(u => u.username === APP_OWNER.username)) {
+          users.push(APP_OWNER);
+      } else {
+          // Always ensure APP_OWNER is up to date in DB
+          users = users.map(u => u.username === APP_OWNER.username ? APP_OWNER : u);
+      }
       return users;
   });
 
@@ -183,7 +185,6 @@ const App = () => {
 
   const t = TRANSLATIONS[lang];
   
-  // Safe derivation of community list
   const communityAlbums = useMemo(() => {
     if (!currentUser) return [];
     let list = currentUser.role === 'owner' ? albums : albums.filter(a => a.communityId === currentUser.communityId);
@@ -195,19 +196,16 @@ const App = () => {
 
   const handleLoginSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!loginU.trim() || !loginP.trim()) return alert(t.required);
+    const uInput = loginU.trim();
+    const pInput = loginP.trim();
+    if (!uInput || !pInput) return alert(t.required);
     
-    // Normalize input for comparison
-    const searchU = loginU.trim().toLowerCase();
-    const searchP = loginP.trim();
-
     const found = userDb.find(u => 
-        (u.username.toLowerCase() === searchU || u.email.toLowerCase() === searchU) && 
-        u.password === searchP
+        (u.username.toLowerCase() === uInput.toLowerCase() || u.email.toLowerCase() === uInput.toLowerCase()) && 
+        u.password === pInput
     );
 
     if (found) {
-        // Atomic update to prevent partial render
         setCurrentUser(found);
         setScreen('albums');
         setLoginU('');
@@ -312,9 +310,44 @@ const App = () => {
                 {selectedAlbum.photos.map((p, i) => (
                     <div key={i} className="aspect-square bg-slate-100 relative group overflow-hidden">
                         <img src={p} className="w-full h-full object-cover" />
-                        <a href={p} download={`ace_${selectedAlbum.name}_${i}.jpg`} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <span className="text-[10px] font-black text-white uppercase bg-blue-950/50 px-2 py-1 rounded">{t.download}</span>
-                        </a>
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <button 
+                              onClick={() => {
+                                const link = document.createElement('a');
+                                link.href = p;
+                                link.download = `ace_${selectedAlbum.name}_${i}.jpg`;
+                                link.click();
+                              }}
+                              className="text-[10px] font-black text-white uppercase bg-blue-950/80 px-3 py-1.5 rounded-full"
+                            >
+                                {t.download}
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            {selectedAlbum.photos.length === 0 && <div className="py-40 text-center opacity-20 font-black italic uppercase tracking-tighter">Empty Gallery</div>}
+        </div>
+    );
+  };
+
+  const MembersScreen = () => {
+    return (
+        <div className="flex flex-col h-full bg-white animate-fade overflow-y-auto pb-48">
+            <header className="px-8 pt-16 pb-6 bg-white/90 backdrop-blur-md sticky top-0 z-20 border-b">
+                <p className="text-[10px] font-black text-lime-600 uppercase tracking-[0.4em] mb-2 italic">PLATFORM</p>
+                <h2 className="text-5xl font-black text-blue-950 tracking-tighter italic leading-none">{t.membersMgmt}</h2>
+            </header>
+            <div className="px-8 mt-8 space-y-4">
+                {userDb.filter(u => u.communityId === currentUser?.communityId || currentUser?.role === 'owner').map(u => (
+                    <div key={u.username} className="bg-slate-50 p-6 rounded-3xl flex justify-between items-center border border-slate-100">
+                        <div>
+                            <p className="font-black text-blue-950 italic">{u.username}</p>
+                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{u.role}</p>
+                        </div>
+                        {(currentUser?.role === 'owner' || currentUser?.role === 'super') && u.username !== currentUser?.username && (
+                            <button className="text-red-500 font-black text-[10px] uppercase">Kick</button>
+                        )}
                     </div>
                 ))}
             </div>
@@ -368,16 +401,16 @@ const App = () => {
     return (
         <div className="flex flex-col h-full bg-white animate-fade overflow-y-auto pb-48">
           <header className="px-8 pt-16 pb-6 bg-white/90 backdrop-blur-md sticky top-0 z-20 border-b flex justify-between items-end">
-            <div>
+            <div className="flex-1 mr-4 overflow-hidden">
                 <p className="text-[10px] font-black text-lime-600 uppercase tracking-[0.4em] mb-2 italic">
                     {filterMode === 'mine' ? t.myUploads : (currentUser.communityId || 'GLOBAL')}
                 </p>
                 <div className="flex items-center gap-2">
-                    <h2 className="text-5xl font-black text-blue-950 tracking-tighter italic leading-none">{t.albums}</h2>
-                    {filterMode === 'mine' && <button onClick={() => setFilterMode('all')} className="bg-slate-100 text-[10px] font-black px-2 py-1 rounded-full uppercase ml-2 shadow-sm">RESET</button>}
+                    <h2 className="text-5xl font-black text-blue-950 tracking-tighter italic leading-none whitespace-nowrap overflow-hidden text-ellipsis">{t.albums}</h2>
+                    {filterMode === 'mine' && <button onClick={() => setFilterMode('all')} className="bg-slate-100 text-[10px] font-black px-2 py-1 rounded-full uppercase ml-2 shadow-sm shrink-0">RESET</button>}
                 </div>
             </div>
-            <button onClick={() => setScreen('upload_form')} className="w-16 h-16 bg-[#A3E635] text-blue-950 rounded-3xl shadow-xl flex items-center justify-center text-4xl font-black border-b-4 border-lime-600 active:translate-y-1">+</button>
+            <button onClick={() => setScreen('upload_form')} className="w-16 h-16 bg-[#A3E635] text-blue-950 rounded-3xl shadow-xl flex items-center justify-center text-4xl font-black border-b-4 border-lime-600 active:translate-y-1 shrink-0">+</button>
           </header>
           <div className="px-8 space-y-10 mt-8">
             {communityAlbums.map(album => (
@@ -386,9 +419,9 @@ const App = () => {
                         <img src={album.cover} className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-700" />
                         <div className="absolute inset-0 bg-gradient-to-t from-blue-950/80 to-transparent"></div>
                         <button onClick={(e) => { e.stopPropagation(); toggleLike(album.id); }} className={`absolute top-8 right-8 w-14 h-14 rounded-[1.5rem] flex items-center justify-center text-2xl shadow-xl transition-all ${currentLikes.includes(album.id) ? 'bg-red-500 text-white' : 'bg-white/20 backdrop-blur-md text-white'}`}>❤</button>
-                        <div className="absolute bottom-10 left-10 text-white">
+                        <div className="absolute bottom-10 left-10 text-white pr-10">
                             <span className="bg-lime-400 text-blue-950 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest mb-3 inline-block shadow-lg">#{album.category}</span>
-                            <h3 className="text-3xl font-black italic uppercase tracking-tighter">{album.name}</h3>
+                            <h3 className="text-3xl font-black italic uppercase tracking-tighter overflow-hidden text-ellipsis">{album.name}</h3>
                             <div className="flex items-center gap-2 opacity-60">
                                 <span className="text-[9px] font-bold">BY {album.owner.toUpperCase()} • {album.photos.length} PHOTOS</span>
                             </div>
@@ -481,10 +514,17 @@ const App = () => {
         {screen === 'gallery_view' && <GalleryView />}
         {screen === 'albums' && <AlbumsScreen />}
         {screen === 'settings' && <ProfileScreen />}
+        {screen === 'members' && <MembersScreen />}
         
-        {['albums', 'settings', 'upload_form', 'gallery_view'].includes(screen) && (
+        {['albums', 'settings', 'upload_form', 'gallery_view', 'members'].includes(screen) && (
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-[94%] bg-blue-950/98 backdrop-blur-3xl rounded-[4rem] flex items-center justify-around py-8 px-6 shadow-2xl border border-white/10 z-50 transition-transform">
             <button onClick={() => { setFilterMode('all'); setScreen('albums'); }} className={`flex flex-col items-center transition-all ${screen === 'albums' || screen === 'gallery_view' || screen === 'upload_form' ? 'text-lime-400' : 'text-slate-500'}`}><div className="text-3xl">📂</div><span className="text-[8px] font-black uppercase tracking-widest mt-1">{t.albums}</span></button>
+            {isManagementView && (
+              <button onClick={() => setScreen('members')} className={`flex flex-col items-center transition-all ${screen === 'members' ? 'text-lime-400' : 'text-slate-500'}`}>
+                <div className="text-3xl">👥</div>
+                <span className="text-[8px] font-black uppercase tracking-widest mt-1">{t.members}</span>
+              </button>
+            )}
             <button onClick={() => setScreen('settings')} className={`flex flex-col items-center transition-all ${screen === 'settings' ? 'text-lime-400' : 'text-slate-500'}`}>
                 <div className="text-3xl">🛡️</div>
                 <span className="text-[8px] font-black uppercase tracking-widest mt-1">{t.profile}</span>
