@@ -4,64 +4,61 @@ Welcome to **AceLine**, the premium tennis community hub designed for high-perfo
 
 ---
 
-## 1. Role System | 角色系统
+## 1. Storage Architecture | 存储架构 (NEW)
 
-AceLine utilizes a hierarchical permission structure to ensure content quality and community security.
+AceLine now uses a **Decentralized Cloud Storage** model. Instead of a shared 100GB limit, storage is provided by the Super Admin's personal cloud drive.
+
+- **Zero Storage Cost**: The platform acts as a management interface. Media is hosted on your linked cloud.
+- **Privacy First**: AceLine utilizes **OAuth Handshake** to access only a dedicated `/Apps/AceLine` folder.
+
+---
+
+## 2. Role System | 角色系统
 
 | Role | Permissions | Acquisition |
 | :--- | :--- | :--- |
-| **Super Admin** (超级管理员) | Full access, Key generation, Community creation | Created via one of the 5 Master Secrets |
-| **Admin** (管理员) | Create/Edit albums, manage community content | Invited by Super Admin via Admin Key |
-| **Member** (正式成员) | View albums, browse community feed | Invited by Admin/Super Admin via Member Key |
+| **App Owner** (平台主) | Global oversight of all Super Admins & Communities | Fixed system account (`Zoe Zhou`) |
+| **Super Admin** (超级管理员) | Create community, **Handshake Cloud Storage**, Manage Admins & Members | Registered via **Master Secret** |
+| **Admin** (管理员) | Manage albums, invite members, moderate content | Appointed by Super Admin |
+| **Member** (正式成员) | Browse albums, upload photos to community cloud | Invited via **Invite Link/Code** |
 
 ---
 
-## 2. Community Setup | 创建社区
+## 3. Account Security | 账号安全 (NEW)
 
-To establish a new hub, follow these steps:
-1. Select **"Create Community"** from the registration screen.
-2. Enter your details (Username, Password, Email).
-3. Provide one of the **5 Master Secrets** (e.g., `ACE-7788`).
-   - *Note: Each Master Secret is one-time use only per browser session. Once a community is tied to it, it becomes used.*
-4. Upon success, a unique **Community ID** is generated automatically.
+### 3.1 Email Verification | 邮箱验证
+- All new accounts are marked as "Unverified" until they complete the email verification process.
+- Verified accounts have priority access and enhanced community trust badges.
+- **Demo Logic**: In this prototype, clicking "Verify" simulates the email sending and confirmation process.
 
----
-
-## 3. Managing Access | 访问权限管理
-
-Super Admins can generate invitation codes to grow their community:
-- Navigate to **Settings** -> **Keys List**.
-- Select the target role (Member or Admin).
-- Click **"Generate & Save"**.
-- Use the **Link Icon** to copy a pre-formatted invitation message containing the Community ID and the verification code.
+### 3.2 Password Recovery | 密码找回
+- If you forget your password, use the **"Forgot Password?"** link on the Login screen.
+- Enter your registered email to receive a recovery link.
+- **Demo Logic**: This prototype simulates the recovery flow without sending physical emails.
 
 ---
 
-## 4. API & Security | 安全与接口说明
+## 4. Community Setup & Cloud Link | 创建社区与云端连接
 
-**Important: Zero Frontend API Exposure**
-- **Authentication**: All sensitive API interactions (e.g., `/api/mystic-analysis`, `/api/mystic-title`) are handled via server-side proxies. 
-- **No Client Keys**: There are zero Google Gemini or other AI API keys embedded in the frontend source code (`index.tsx`).
-- **Data Privacy**: Personal information and credentials are never exposed in the browser's page source.
-
----
-
-## 5. Pre-set Master Secrets | 预设超级管理密钥
-
-The following keys are the only valid strings to initialize a new Super Admin account:
-- `ACE-7788`
-- `ACE-9922`
-- `ACE-1155`
-- `ACE-3344`
-- `ACE-5566`
+To establish a new community:
+1. Select **"Register"** and enter your credentials.
+2. Use a **Master Secret** (e.g., `ACE-7788`) in the "Invite Code" field to become a Super Admin.
+3. **Cloud Handshake**: Choose your cloud provider and complete the OAuth flow.
 
 ---
 
-## 6. Local Storage | 数据存储
+## 5. Invitation System | 邀请机制
 
-- All community data, user profiles, and invite statuses are managed via `localStorage`.
-- To reset the application state, clear your browser's site data.
-- **Cross-Device**: Since this is a client-side demo, data does not sync across different browsers unless a backend integration is active.
+AceLine features an automated **Deep Link** invitation system:
+- **Share**: Super Admins/Admins can click "Share Invite Link" in their Profile.
+- **Mechanism**: The link contains `inviteCode` and `cid` parameters for auto-filling the registration form.
+
+---
+
+## 6. Pre-set Master Secrets | 预设超级管理密钥
+
+The following keys initialize a new Super Admin account:
+- `ACE-7788`, `ACE-9922`, `ACE-1155`, `ACE-3344`, `ACE-5566`
 
 ---
 *AceLine - Relive Every Match Point.*
