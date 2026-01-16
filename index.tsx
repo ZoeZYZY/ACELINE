@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -140,14 +139,6 @@ interface Album {
   photos: string[]; 
 }
 
-interface InviteCode {
-  id: string;
-  code: string;
-  role: Role;
-  communityId: string;
-  used: boolean;
-}
-
 const APP_OWNER: User = {
     username: "Zoe Zhou",
     password: "ACE-7788",
@@ -173,17 +164,13 @@ const App = () => {
   });
 
   const [albums, setAlbums] = useState<Album[]>(() => JSON.parse(localStorage.getItem('ace_albums') || '[]'));
-  const [inviteCodes, setInviteCodes] = useState<InviteCode[]>(() => JSON.parse(localStorage.getItem('ace_invites') || '[]'));
   const [userLikes, setUserLikes] = useState<Record<string, string[]>>(() => JSON.parse(localStorage.getItem('ace_likes') || '{}'));
-  const [usedMasterKeys, setUsedMasterKeys] = useState<string[]>(() => JSON.parse(localStorage.getItem('ace_used_master_keys') || '[]'));
 
   useEffect(() => {
     localStorage.setItem('ace_users', JSON.stringify(userDb));
     localStorage.setItem('ace_albums', JSON.stringify(albums));
-    localStorage.setItem('ace_invites', JSON.stringify(inviteCodes));
     localStorage.setItem('ace_likes', JSON.stringify(userLikes));
-    localStorage.setItem('ace_used_master_keys', JSON.stringify(usedMasterKeys));
-  }, [userDb, albums, inviteCodes, userLikes, usedMasterKeys]);
+  }, [userDb, albums, userLikes]);
 
   const t = TRANSLATIONS[lang];
   
@@ -268,7 +255,6 @@ const App = () => {
     const photoInputRef = useRef<HTMLInputElement>(null);
     if (!selectedAlbum) return null;
 
-    // FIX: Cast Array.from result to File[] to satisfy fileToBase64 parameter type
     const handleAddPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const files = Array.from(e.target.files) as File[];
@@ -299,12 +285,12 @@ const App = () => {
                     <div key={i} className="aspect-square bg-slate-100 relative group overflow-hidden">
                         <img src={p} className="w-full h-full object-cover" />
                         <a href={p} download={`ace_photo_${i}.jpg`} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <span className="text-[10px] font-black text-white uppercase bg-blue-950/50 px-2 py-1 rounded">DL</span>
+                            <span className="text-[10px] font-black text-white uppercase bg-blue-950/50 px-2 py-1 rounded">{t.download}</span>
                         </a>
                     </div>
                 ))}
             </div>
-            {selectedAlbum.photos.length === 0 && <div className="py-40 text-center opacity-20 font-black italic">EMPTY GALLERY</div>}
+            {selectedAlbum.photos.length === 0 && <div className="py-40 text-center opacity-20 font-black italic uppercase tracking-tighter">Empty Gallery</div>}
         </div>
     );
   };
@@ -359,7 +345,7 @@ const App = () => {
                 </p>
                 <div className="flex items-center gap-2">
                     <h2 className="text-5xl font-black text-blue-950 tracking-tighter italic leading-none">{t.albums}</h2>
-                    {filterMode === 'mine' && <button onClick={() => setFilterMode('all')} className="bg-slate-100 text-[10px] font-black px-2 py-1 rounded-full uppercase">RESET</button>}
+                    {filterMode === 'mine' && <button onClick={() => setFilterMode('all')} className="bg-slate-100 text-[10px] font-black px-2 py-1 rounded-full uppercase ml-2">RESET</button>}
                 </div>
             </div>
             <button onClick={() => setScreen('upload_form')} className="w-16 h-16 bg-[#A3E635] text-blue-950 rounded-3xl shadow-xl flex items-center justify-center text-4xl font-black border-b-4 border-lime-600 active:translate-y-1">+</button>
@@ -370,7 +356,7 @@ const App = () => {
                     <div className="h-72 rounded-[3.5rem] overflow-hidden relative cursor-pointer" onClick={() => { setSelectedAlbumId(album.id); setScreen('gallery_view'); }}>
                         <img src={album.cover} className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-700" />
                         <div className="absolute inset-0 bg-gradient-to-t from-blue-950/80 to-transparent"></div>
-                        <button onClick={(e) => { e.stopPropagation(); toggleLike(album.id); }} className={`absolute top-8 right-8 w-14 h-14 rounded-[1.5rem] flex items-center justify-center text-2xl shadow-xl ${currentLikes.includes(album.id) ? 'bg-red-500 text-white' : 'bg-white/20 backdrop-blur-md text-white'}`}>❤</button>
+                        <button onClick={(e) => { e.stopPropagation(); toggleLike(album.id); }} className={`absolute top-8 right-8 w-14 h-14 rounded-[1.5rem] flex items-center justify-center text-2xl shadow-xl transition-all ${currentLikes.includes(album.id) ? 'bg-red-500 text-white' : 'bg-white/20 backdrop-blur-md text-white'}`}>❤</button>
                         <div className="absolute bottom-10 left-10 text-white">
                             <span className="bg-lime-400 text-blue-950 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest mb-3 inline-block shadow-lg">#{album.category}</span>
                             <h3 className="text-3xl font-black italic uppercase tracking-tighter">{album.name}</h3>
@@ -422,7 +408,7 @@ const App = () => {
             <div className="w-36 h-36 bg-[#A3E635] rounded-[4rem] flex items-center justify-center shadow-2xl border-b-8 border-lime-600"><TennisBallIcon className="w-24 h-24" /></div>
             <div className="space-y-4"><h1 className="text-7xl font-black text-white tracking-tighter italic uppercase leading-none">AceLine</h1><p className="text-slate-500 font-bold tracking-widest text-xs uppercase opacity-80">{t.tagline}</p></div>
             <div className="w-full space-y-4 max-w-xs pt-8">
-                <button onClick={() => setScreen('login_form')} className="w-full py-7 bg-[#A3E635] text-blue-950 font-black rounded-full text-2xl shadow-2xl uppercase italic border-b-8 border-lime-600">{t.login}</button>
+                <button onClick={() => setScreen('login_form')} className="w-full py-7 bg-[#A3E635] text-blue-950 font-black rounded-full text-2xl shadow-2xl uppercase italic border-b-8 border-lime-600 active:translate-y-1">{t.login}</button>
                 <button onClick={() => setScreen('register_choice')} className="w-full py-4 bg-white/5 text-white rounded-2xl font-black text-[11px] border border-white/10 uppercase tracking-[0.2em]">{t.register}</button>
             </div>
           </div>
@@ -432,15 +418,16 @@ const App = () => {
                 <TennisBallIcon className="w-14 h-14 mb-8 self-center" />
                 <h2 className="text-[38px] font-black text-[#1E293B] mb-10 tracking-tighter uppercase italic text-center leading-none">LOGIN</h2>
                 <div className="space-y-4">
-                    <input id="login-u" placeholder="Username" className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all" />
-                    <input id="login-p" type="password" placeholder="Password" className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all" />
+                    <input id="login-u" placeholder={t.username} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all" />
+                    <input id="login-p" type="password" placeholder={t.password} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all" />
                     <button onClick={() => {
                         const u = (document.getElementById('login-u') as HTMLInputElement).value;
                         const p = (document.getElementById('login-p') as HTMLInputElement).value;
+                        if (!u || !p) return alert(t.required);
                         const found = userDb.find(user => (user.username === u || user.email === u) && user.password === p);
-                        if (found) { setCurrentUser(found); setScreen('albums'); } else alert("Invalid username or password.");
+                        if (found) { setCurrentUser(found); setScreen('albums'); } else alert("Invalid credentials.");
                     }} className="w-full py-7 bg-[#A3E635] text-blue-950 font-black rounded-full text-xl shadow-xl mt-4 uppercase italic tracking-tighter border-b-8 border-lime-600 active:translate-y-1">{t.login}</button>
-                    <button onClick={() => setScreen('auth')} className="w-full py-4 text-slate-400 font-bold text-xs uppercase text-center tracking-widest">Back</button>
+                    <button onClick={() => setScreen('auth')} className="w-full py-4 text-slate-400 font-bold text-xs uppercase text-center tracking-widest">{t.back}</button>
                 </div>
             </div>
         )}
@@ -449,19 +436,36 @@ const App = () => {
                 <h2 className="text-[42px] font-black text-[#1E293B] mb-2 tracking-tighter uppercase italic text-center leading-none">JOIN THE COURT</h2>
                 <button onClick={() => {setRegMode('create'); setScreen('register_form');}} className="w-full p-8 bg-blue-950 text-white rounded-[3.5rem] text-left shadow-2xl border-b-8 border-slate-800 font-black text-2xl italic uppercase">{t.createCommunity}</button>
                 <button onClick={() => {setRegMode('join'); setScreen('register_form');}} className="w-full p-8 bg-slate-50 border border-slate-200 rounded-[3.5rem] text-left text-blue-950 font-black text-2xl italic uppercase">{t.joinCommunity}</button>
-                <button onClick={() => setScreen('auth')} className="py-4 text-slate-300 font-black uppercase text-xs text-center tracking-widest">Back</button>
+                <button onClick={() => setScreen('auth')} className="py-4 text-slate-300 font-black uppercase text-xs text-center tracking-widest">{t.back}</button>
             </div>
         )}
         {screen === 'register_form' && <div className="h-full bg-white p-10 pt-20 animate-slide">
-            <button onClick={() => setScreen('register_choice')} className="mb-10 text-xs font-black uppercase">← Back</button>
+            <button onClick={() => setScreen('register_choice')} className="mb-10 text-xs font-black uppercase">← {t.back}</button>
             <h2 className="text-3xl font-black mb-8 italic uppercase">{regMode === 'create' ? t.createCommunity : t.joinCommunity}</h2>
             <div className="space-y-4">
-                <input placeholder={t.username} className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none" />
-                <input type="password" placeholder={t.password} className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none" />
-                <input placeholder={regMode === 'create' ? "Master Key" : t.invitationCode} className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none" />
-                <button onClick={() => alert("Registration demo: Contact admin for actual account creation.")} className="w-full py-6 bg-[#A3E635] text-blue-950 font-black rounded-full text-xl shadow-xl mt-8 italic uppercase border-b-8 border-lime-600">{t.register}</button>
+                <input id="reg-u" placeholder={t.username} className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none" />
+                <input id="reg-p" type="password" placeholder={t.password} className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none" />
+                <input id="reg-key" placeholder={regMode === 'create' ? "Master Key" : t.invitationCode} className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none" />
+                <button onClick={() => {
+                    const u = (document.getElementById('reg-u') as HTMLInputElement).value;
+                    const p = (document.getElementById('reg-p') as HTMLInputElement).value;
+                    const k = (document.getElementById('reg-key') as HTMLInputElement).value;
+                    
+                    if(!u || !p || !k) return alert(t.required);
+                    
+                    if(regMode === 'create') {
+                        if(!MASTER_KEYS.includes(k)) return alert("Invalid Master Key");
+                        const newUser: User = { username: u, password: p, email: '', role: 'owner', communityId: 'COMM-' + Math.floor(Math.random()*1000), createdAt: Date.now() };
+                        setUserDb([...userDb, newUser]);
+                        setCurrentUser(newUser);
+                        setScreen('albums');
+                    } else {
+                        alert("Registration demo: Please use Zoe Zhou/ACE-7788 to login.");
+                    }
+                }} className="w-full py-6 bg-[#A3E635] text-blue-950 font-black rounded-full text-xl shadow-xl mt-8 italic uppercase border-b-8 border-lime-600 active:translate-y-1">{t.register}</button>
             </div>
         </div>}
+        
         {screen === 'upload_form' && <UploadForm />}
         {screen === 'gallery_view' && <GalleryView />}
         {screen === 'albums' && <AlbumsScreen />}
