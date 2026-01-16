@@ -1,32 +1,29 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AceLine - Tennis Community Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background-color: #E2E8F0;
-            color: #0F172A;
-            -webkit-tap-highlight-color: transparent;
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            background-color: #F8FAFC; 
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
         }
-        .neon-lime { background-color: #A3E635; }
-        .text-neon-lime { color: #A3E635; }
-        .bg-navy { background-color: #0F172A; }
+        #root { width: 100%; height: 100%; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slide-in-bottom { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-fade { animation: fade-in 0.4s ease-out forwards; }
         
-        .animate-fade { animation: fade-in 0.5s ease-out; }
-        .animate-slide { animation: slide-in-bottom 0.4s ease-out; }
-
-        /* 优化触控反馈 */
-        button:active { transform: scale(0.96); }
+        input { font-size: 16px !important; } /* 防止 iOS 缩放 */
+        .break-word { word-break: break-all; overflow-wrap: break-word; }
     </style>
     <script type="importmap">
     {
@@ -39,7 +36,7 @@
     }
     </script>
 </head>
-<body class="min-h-screen overflow-hidden select-none">
+<body class="select-none">
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
 </body>
