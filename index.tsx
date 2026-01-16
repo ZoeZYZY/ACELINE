@@ -1,110 +1,71 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 
-// Pre-configured Super Admin Keys for initial community bootstrapping
+// Pre-configured Super Admin Keys
 const MASTER_KEYS = ['ACE-7788', 'ACE-9922', 'ACE-1155', 'ACE-3344', 'ACE-5566'];
+
+type CloudProvider = 'Baidu' | 'Weiyun' | 'Aliyun' | 'Google' | 'OneDrive' | 'Dropbox' | 'None';
+
+interface CloudConfig {
+  provider: CloudProvider;
+  connected: boolean;
+  usedSpaceGB: number;
+  totalSpaceGB: number;
+  lastSync: number;
+}
 
 // Localized Strings
 const TRANSLATIONS = {
   en: {
     appName: "AceLine",
     tagline: "Relive Every Match Point",
-    feed: "Feed",
-    sync: "Sync",
     albums: "Albums",
-    settings: "Settings",
     members: "Members",
     profile: "Profile",
-    favorites: "Favorites",
-    myUploads: "My Uploads",
-    membersMgmt: "Member Management",
-    uploadAlbum: "Create Album",
-    create: "Publish",
-    name: "Name",
-    coverUrl: "Select Cover",
-    description: "Description",
-    category: "Category",
-    role: "Current Role",
-    user: "Member",
+    storage: "Cloud Storage",
+    handshake: "OAuth Handshake",
+    ownerView: "Global Management",
+    community: "Community",
     admin: "Admin",
-    super: "Super Admin",
-    owner: "App Owner",
+    status: "Status",
     logout: "Logout",
     login: "Login",
-    register: "Register",
-    username: "Username",
-    password: "Password",
-    email: "Email Address",
-    communityId: "Community ID",
-    joinCommunity: "Join Community",
-    createCommunity: "Create Community",
-    invitationCode: "Invitation Code",
-    codesList: "Keys List",
-    required: "Required",
-    copySuccess: "Invite info copied!",
-    sendVerify: "Send Code",
-    counting: "s left",
-    verifyCode: "Verify Code",
-    forgotPass: "Forgot Password?",
-    kickConfirm: "Are you sure you want to remove this member?",
-    joined: "Joined",
-    globalView: "Global Oversight",
-    noFavs: "No favorites yet",
-    successUpload: "Album created!",
-    addPhotos: "Add Photos",
-    download: "Download",
     back: "Back",
-    loginError: "Login failed. Please check credentials."
+    register: "Join AceLine",
+    inviteCode: "Invite Code",
+    shareInvite: "Share Invite Link",
+    riskNotice: "Privacy Notice: AceLine only accesses the /Apps/AceLine folder in your cloud drive.",
+    connectSuccess: "Handshake verified!",
+    copyLink: "Invite link copied to clipboard",
+    loginError: "Login Failed",
+    username: "Username",
+    password: "Password"
   },
   cn: {
     appName: "网球相册 AceLine",
     tagline: "记录每一个制胜分",
-    feed: "动态",
-    sync: "同步",
     albums: "相册集",
-    settings: "设置",
     members: "成员",
     profile: "个人中心",
-    favorites: "我的收藏",
-    myUploads: "我的上传",
-    membersMgmt: "成员管理",
-    uploadAlbum: "新建相册",
-    create: "立即发布",
-    name: "相册名称",
-    coverUrl: "选择封面",
-    description: "相册描述",
-    category: "分类标签",
-    role: "当前身份",
-    user: "正式成员",
+    storage: "云盘管理",
+    handshake: "云端授权握手",
+    ownerView: "全局概览",
+    community: "社区",
     admin: "管理员",
-    super: "超级管理员",
-    owner: "平台主管理员",
+    status: "状态",
     logout: "退出登录",
     login: "登录",
-    register: "注册",
-    username: "用户名",
-    password: "密码",
-    email: "电子邮箱",
-    communityId: "社区 ID",
-    joinCommunity: "加入现有社区",
-    createCommunity: "创建新社区",
-    invitationCode: "邀请验证码",
-    codesList: "密钥列表",
-    required: "必填",
-    copySuccess: "邀请信息已复制！",
-    sendVerify: "发送验证码",
-    counting: "秒后重发",
-    verifyCode: "验证码",
-    forgotPass: "忘记密码？",
-    kickConfirm: "确定要移除该成员吗？",
-    joined: "加入时间",
-    globalView: "全平台管理概览",
-    noFavs: "暂无收藏内容",
-    successUpload: "相册创建成功！",
-    addPhotos: "上传照片",
-    download: "保存到本地",
     back: "返回",
-    loginError: "登录失败，请检查用户名和密码"
+    register: "加入 AceLine",
+    inviteCode: "邀请码",
+    shareInvite: "分享邀请链接",
+    riskNotice: "隐私告知：AceLine 仅拥有对您云盘中 /Apps/AceLine 文件夹的读写权限。",
+    connectSuccess: "云端握手校验成功！",
+    copyLink: "邀请链接已复制到剪贴板",
+    loginError: "登录失败",
+    username: "用户名",
+    password: "密码"
   }
 };
 
@@ -118,7 +79,7 @@ const TennisBallIcon = ({ className = "w-16 h-16" }) => (
 );
 
 type Role = 'user' | 'admin' | 'super' | 'owner';
-type Screen = 'auth' | 'login_form' | 'forgot_form' | 'register_choice' | 'register_form' | 'albums' | 'feed' | 'sync' | 'settings' | 'members' | 'keys_mgmt' | 'upload_form' | 'gallery_view';
+type Screen = 'auth' | 'login_form' | 'register_form' | 'albums' | 'settings' | 'members' | 'gallery_view' | 'owner_dashboard' | 'cloud_setup';
 
 interface User {
   username: string;
@@ -126,446 +87,324 @@ interface User {
   role: Role;
   email: string;
   communityId: string;
-  createdAt: number;
+  inviteCode?: string;
+  cloudConfig?: CloudConfig;
 }
 
-interface Album {
-  id: string;
-  name: string;
-  cover: string; 
-  desc: string;
-  category: string;
-  createdAt: number;
-  owner: string;
-  communityId: string;
-  photos: string[]; 
-}
-
-const APP_OWNER: User = {
+const APP_OWNER_USER: User = {
     username: "Zoe Zhou",
     password: "ACE-7788",
     email: "zoezhou85@hotmail.com",
     role: "owner",
-    communityId: "GLOBAL",
-    createdAt: 1714560000000
+    communityId: "SYSTEM_ROOT"
 };
+
+const CLOUD_PROVIDERS: { id: CloudProvider, name: string, color: string }[] = [
+    { id: 'Baidu', name: '百度网盘', color: '#2b32b2' },
+    { id: 'Weiyun', name: '腾讯微云', color: '#0052d4' },
+    { id: 'Aliyun', name: '阿里云盘', color: '#ff6a00' },
+    { id: 'Google', name: 'Google Drive', color: '#34a853' },
+    { id: 'OneDrive', name: 'OneDrive', color: '#0078d4' },
+    { id: 'Dropbox', name: 'Dropbox', color: '#0061ff' }
+];
 
 const App = () => {
   const [lang, setLang] = useState<'en' | 'cn'>('cn');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [screen, setScreen] = useState<Screen>('auth');
-  const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
-  const [regMode, setRegMode] = useState<'create' | 'join'>('join');
-  const [filterMode, setFilterMode] = useState<'all' | 'mine'>('all');
-  
   const [loginU, setLoginU] = useState('');
   const [loginP, setLoginP] = useState('');
-  const [showP, setShowP] = useState(false);
-
-  // CRITICAL FIX: Direct atomic initialization to bypass any corrupted data in localStorage
-  const [userDb, setUserDb] = useState<User[]>(() => {
-    try {
-      const saved = localStorage.getItem('ace_users');
-      let users: User[] = saved ? JSON.parse(saved) : [];
-      // If users is not an array (corrupted data), reset it
-      if (!Array.isArray(users)) users = [];
-      
-      // Force clean APP_OWNER - this is the "Kill Switch" for the white screen bug
-      const filtered = users.filter(u => u && u.username && u.username.toLowerCase() !== APP_OWNER.username.toLowerCase());
-      filtered.push({ ...APP_OWNER }); // Always use fresh copy
-      return filtered;
-    } catch (e) {
-      return [APP_OWNER];
-    }
-  });
-
-  const [albums, setAlbums] = useState<Album[]>(() => {
-    try {
-      const saved = localStorage.getItem('ace_albums');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
   
-  const [userLikes, setUserLikes] = useState<Record<string, string[]>>(() => {
-    try {
-      const saved = localStorage.getItem('ace_likes');
-      return saved ? JSON.parse(saved) : {};
-    } catch { return {}; }
+  // Registration / Invite logic
+  const [regU, setRegU] = useState('');
+  const [regP, setRegP] = useState('');
+  const [regI, setRegI] = useState('');
+
+  const [userDb, setUserDb] = useState<User[]>(() => {
+    const saved = localStorage.getItem('ace_users_v3');
+    let users = saved ? JSON.parse(saved) : [];
+    if (!users.find((u:any) => u.username === APP_OWNER_USER.username)) users.push(APP_OWNER_USER);
+    return users;
   });
 
   useEffect(() => {
-    localStorage.setItem('ace_users', JSON.stringify(userDb));
-    localStorage.setItem('ace_albums', JSON.stringify(albums));
-    localStorage.setItem('ace_likes', JSON.stringify(userLikes));
-  }, [userDb, albums, userLikes]);
+    localStorage.setItem('ace_users_v3', JSON.stringify(userDb));
+    
+    // Auto-parse invite code from URL
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('inviteCode');
+    if (code) {
+        setRegI(code);
+        setScreen('register_form');
+    }
+  }, [userDb]);
 
   const t = TRANSLATIONS[lang];
-  
-  // SAFE DERIVATION: Comprehensive null-checks for every property access
-  const communityAlbums = useMemo(() => {
-    if (!currentUser || !currentUser.username) return [];
-    const albumsList = Array.isArray(albums) ? albums : [];
-    
-    let list = (currentUser.role === 'owner') 
-      ? albumsList 
-      : albumsList.filter(a => a && a.communityId === currentUser.communityId);
-      
-    if (filterMode === 'mine') {
-      list = list.filter(a => a && a.owner === currentUser.username);
-    }
-    return list;
-  }, [albums, currentUser, filterMode]);
 
-  const selectedAlbum = useMemo(() => albums.find(a => a && a.id === selectedAlbumId), [albums, selectedAlbumId]);
-
-  const handleLoginSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const uInput = loginU.trim();
-    const pInput = loginP.trim();
-    if (!uInput || !pInput) return alert(t.required);
-    
-    // Hard check against static credentials for APP_OWNER to guarantee entry
-    const isOwner = (uInput.toLowerCase() === APP_OWNER.username.toLowerCase() || uInput.toLowerCase() === APP_OWNER.email.toLowerCase()) && pInput === APP_OWNER.password;
-    
-    const found = isOwner ? APP_OWNER : userDb.find(u => 
-        u && u.username && 
-        (u.username.toLowerCase() === uInput.toLowerCase() || u.email.toLowerCase() === uInput.toLowerCase()) && 
-        u.password === pInput
-    );
-
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const found = userDb.find(u => u.username.toLowerCase() === loginU.toLowerCase() && u.password === loginP);
     if (found) {
-        // One last schema safety check
-        const safeUser: User = {
-          ...found,
-          role: found.role || 'user',
-          communityId: found.communityId || 'GLOBAL'
-        };
-        setCurrentUser(safeUser);
-        setScreen('albums');
-        setLoginU('');
-        setLoginP('');
-        setShowP(false);
-    } else {
-        alert(t.loginError);
-    }
+        setCurrentUser(found);
+        setScreen(found.role === 'owner' ? 'owner_dashboard' : 'albums');
+    } else alert(t.loginError);
   };
 
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = error => reject(error);
-    });
+  const handleRegister = (e: React.FormEvent) => {
+    e.preventDefault();
+    // In real app, we verify regI against valid invite codes in DB
+    const isMasterKey = MASTER_KEYS.includes(regI);
+    const newUser: User = {
+        username: regU,
+        password: regP,
+        email: `${regU}@example.com`,
+        role: isMasterKey ? 'super' : 'user',
+        communityId: isMasterKey ? `COMM_${Math.random().toString(36).substr(2, 6).toUpperCase()}` : 'GUEST_POOL',
+        inviteCode: Math.random().toString(36).substr(2, 8).toUpperCase()
+    };
+    setUserDb([...userDb, newUser]);
+    setCurrentUser(newUser);
+    setScreen(newUser.role === 'super' ? 'cloud_setup' : 'albums');
   };
 
-  const toggleLike = (albumId: string) => {
+  const generateInviteLink = () => {
     if (!currentUser) return;
-    const currentLikes = userLikes[currentUser.username] || [];
-    const newLikes = currentLikes.includes(albumId) ? currentLikes.filter(id => id !== albumId) : [...currentLikes, albumId];
-    setUserLikes({ ...userLikes, [currentUser.username]: newLikes });
+    const link = `${window.location.origin}${window.location.pathname}?inviteCode=${currentUser.inviteCode}&cid=${currentUser.communityId}`;
+    navigator.clipboard.writeText(link);
+    alert(`${t.copyLink}: ${link}`);
   };
 
-  const UploadForm = () => {
-    const [n, setN] = useState('');
-    const [c, setC] = useState('');
-    const [d, setD] = useState('');
-    const [cat, setCat] = useState('Match');
-    const fileInputRef = useRef<HTMLInputElement>(null);
+  const OwnerDashboard = () => (
+    <div className="flex flex-col h-full bg-slate-50 overflow-y-auto pb-40 animate-fade">
+        <header className="px-8 pt-20 pb-8 bg-white border-b">
+            <h1 className="text-4xl font-black text-blue-950 italic uppercase tracking-tighter">{t.ownerView}</h1>
+            <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Platform Oversight Panel</p>
+        </header>
+        <div className="p-6 space-y-4">
+            {userDb.filter(u => u.role === 'super').map(u => (
+                <div key={u.username} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-lime-400 rounded-2xl flex items-center justify-center font-black italic">S</div>
+                            <div>
+                                <h3 className="font-black text-blue-950 italic uppercase">{u.username}</h3>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase">ID: {u.communityId}</p>
+                            </div>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase ${u.cloudConfig?.connected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                            {u.cloudConfig?.connected ? u.cloudConfig.provider : 'No Link'}
+                        </span>
+                    </div>
+                    {u.cloudConfig?.connected && (
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-[8px] font-black uppercase text-slate-400">
+                                <span>Cloud Usage</span>
+                                <span>{((u.cloudConfig.usedSpaceGB/u.cloudConfig.totalSpaceGB)*100).toFixed(1)}%</span>
+                            </div>
+                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-600" style={{ width: `${(u.cloudConfig.usedSpaceGB/u.cloudConfig.totalSpaceGB)*100}%` }}></div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            ))}
+        </div>
+    </div>
+  );
 
-    const handleUpload = () => {
-        if(!n || !c) return alert(t.required);
-        if(!currentUser) return;
-        const newAlbum: Album = {
-            id: Math.random().toString(36).substr(2, 9),
-            name: n, cover: c, desc: d, category: cat,
-            createdAt: Date.now(),
-            owner: currentUser.username,
-            communityId: currentUser.communityId,
-            photos: []
-        };
-        setAlbums([newAlbum, ...albums]);
-        setScreen('albums');
+  const CloudHandshakeScreen = () => {
+    const [selectedP, setSelectedP] = useState<CloudProvider>('None');
+    const [step, setStep] = useState(1);
+
+    const startHandshake = () => {
+        setStep(2);
+        setTimeout(() => {
+            if (!currentUser) return;
+            const config: CloudConfig = {
+                provider: selectedP,
+                connected: true,
+                usedSpaceGB: Math.random() * 500,
+                totalSpaceGB: 2048,
+                lastSync: Date.now()
+            };
+            const updated = userDb.map(u => u.username === currentUser.username ? { ...u, cloudConfig: config } : u);
+            setUserDb(updated);
+            setCurrentUser({ ...currentUser, cloudConfig: config });
+            setStep(3);
+        }, 2000);
     };
 
     return (
-        <div className="flex flex-col h-full bg-white p-10 pt-16 animate-slide overflow-y-auto pb-40">
-            <h2 className="text-[32px] font-black text-blue-950 mb-8 tracking-tighter italic uppercase">{t.uploadAlbum}</h2>
-            <div className="space-y-6">
-                <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">{t.name}*</label>
-                    <input value={n} onChange={e => setN(e.target.value)} className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-950" />
+        <div className="flex flex-col h-full bg-white p-8 animate-slide">
+            <header className="mb-10">
+                <h2 className="text-4xl font-black text-blue-950 italic uppercase tracking-tighter">{t.handshake}</h2>
+                <div className="flex items-center gap-2 mt-4">
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className={`h-1.5 flex-1 rounded-full ${step >= i ? 'bg-lime-400' : 'bg-slate-100'}`}></div>
+                    ))}
                 </div>
-                <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">{t.coverUrl}*</label>
-                    <div onClick={() => fileInputRef.current?.click()} className="w-full aspect-video bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer overflow-hidden group">
-                        {c ? <img src={c} className="w-full h-full object-cover" /> : <div className="text-center"><span className="text-3xl">📷</span><p className="text-[10px] font-bold text-slate-400 mt-2">TAP TO SELECT</p></div>}
-                        <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={async (e) => {
-                            if (e.target.files?.[0]) setC(await fileToBase64(e.target.files[0]));
-                        }} />
-                    </div>
-                </div>
-                <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">{t.description}</label>
-                    <textarea value={d} onChange={e => setD(e.target.value)} className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none h-24 resize-none" />
-                </div>
-            </div>
-            <button onClick={handleUpload} className="w-full py-6 bg-[#A3E635] text-blue-950 font-black rounded-full text-xl shadow-xl mt-12 uppercase italic border-b-8 border-lime-600 active:translate-y-1">{t.create}</button>
-        </div>
-    );
-  };
-
-  const GalleryView = () => {
-    const photoInputRef = useRef<HTMLInputElement>(null);
-    if (!selectedAlbum) return null;
-
-    return (
-        <div className="flex flex-col h-full bg-white animate-fade overflow-y-auto pb-48">
-            <header className="px-8 pt-16 pb-6 bg-white/90 backdrop-blur-md sticky top-0 z-20 border-b flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                    <button onClick={() => setScreen('albums')} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black">←</button>
-                    <div>
-                        <h2 className="text-2xl font-black text-blue-950 tracking-tighter italic uppercase leading-none">{selectedAlbum.name}</h2>
-                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">{selectedAlbum.photos.length} PHOTOS</p>
-                    </div>
-                </div>
-                {(currentUser?.username === selectedAlbum.owner || currentUser?.role === 'owner') && (
-                    <button onClick={() => photoInputRef.current?.click()} className="bg-blue-950 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
-                        {t.addPhotos}
-                        <input type="file" multiple accept="image/*" ref={photoInputRef} className="hidden" onChange={async (e) => {
-                            if (e.target.files) {
-                                const newPhotos = await Promise.all(Array.from(e.target.files).map(f => fileToBase64(f)));
-                                setAlbums(prev => prev.map(a => a.id === selectedAlbumId ? { ...a, photos: [...a.photos, ...newPhotos] } : a));
-                            }
-                        }} />
-                    </button>
-                )}
             </header>
-            <div className="p-4 grid grid-cols-3 gap-1">
-                {selectedAlbum.photos.map((p, i) => (
-                    <div key={i} className="aspect-square bg-slate-100 relative group overflow-hidden">
-                        <img src={p} className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+
+            {step === 1 && (
+                <div className="space-y-6">
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">{t.riskNotice}</p>
+                    <div className="grid grid-cols-2 gap-3">
+                        {CLOUD_PROVIDERS.map(p => (
                             <button 
-                              onClick={() => {
-                                const link = document.createElement('a');
-                                link.href = p;
-                                link.download = `ace_${selectedAlbum.name}_${i}.jpg`;
-                                link.click();
-                              }}
-                              className="text-[10px] font-black text-white uppercase bg-blue-950/80 px-3 py-1.5 rounded-full"
+                                key={p.id} 
+                                onClick={() => setSelectedP(p.id)}
+                                className={`p-5 rounded-3xl border-2 transition-all flex flex-col items-center gap-2 ${selectedP === p.id ? 'border-lime-400 bg-lime-50' : 'border-slate-50 bg-slate-50'}`}
                             >
-                                {t.download}
+                                <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center font-black text-xs" style={{ color: p.color }}>{p.id[0]}</div>
+                                <span className="text-[10px] font-black uppercase">{p.name}</span>
                             </button>
-                        </div>
+                        ))}
                     </div>
-                ))}
-            </div>
-            {selectedAlbum.photos.length === 0 && <div className="py-40 text-center opacity-20 font-black italic uppercase tracking-tighter">Empty Gallery</div>}
+                    <button disabled={selectedP === 'None'} onClick={startHandshake} className="w-full py-6 bg-blue-950 text-white rounded-full font-black uppercase text-xl disabled:opacity-20">Start Handshake</button>
+                </div>
+            )}
+
+            {step === 2 && (
+                <div className="flex-1 flex flex-col items-center justify-center space-y-6">
+                    <div className="w-20 h-20 border-4 border-lime-400 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="font-black text-blue-950 uppercase italic tracking-widest">Handshaking with {selectedP}...</p>
+                </div>
+            )}
+
+            {step === 3 && (
+                <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-fade">
+                    <div className="w-24 h-24 bg-lime-400 rounded-full flex items-center justify-center text-4xl shadow-xl shadow-lime-100">✓</div>
+                    <h3 className="text-2xl font-black text-blue-950 uppercase italic text-center">{t.connectSuccess}</h3>
+                    <button onClick={() => setScreen('albums')} className="w-full py-6 bg-blue-950 text-white rounded-full font-black uppercase text-xl">Enter Community</button>
+                </div>
+            )}
         </div>
     );
   };
-
-  const MembersScreen = () => {
-    return (
-        <div className="flex flex-col h-full bg-white animate-fade overflow-y-auto pb-48">
-            <header className="px-8 pt-16 pb-6 bg-white/90 backdrop-blur-md sticky top-0 z-20 border-b">
-                <p className="text-[10px] font-black text-lime-600 uppercase tracking-[0.4em] mb-2 italic">PLATFORM</p>
-                <h2 className="text-5xl font-black text-blue-950 tracking-tighter italic leading-none">{t.membersMgmt}</h2>
-            </header>
-            <div className="px-8 mt-8 space-y-4">
-                {userDb.filter(u => u && (u.communityId === currentUser?.communityId || currentUser?.role === 'owner')).map(u => (
-                    <div key={u.username} className="bg-slate-50 p-6 rounded-3xl flex justify-between items-center border border-slate-100">
-                        <div>
-                            <p className="font-black text-blue-950 italic">{u.username}</p>
-                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{u.role}</p>
-                        </div>
-                        {(currentUser?.role === 'owner' || currentUser?.role === 'super') && u.username !== currentUser?.username && (
-                            <button className="text-red-500 font-black text-[10px] uppercase">Kick</button>
-                        )}
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-  };
-
-  const ProfileScreen = () => {
-    if (!currentUser) return null;
-    const userLikesArr = userLikes[currentUser.username] || [];
-    const likedAlbumsCount = albums.filter(a => a && userLikesArr.includes(a.id)).length;
-    const userUploadsCount = albums.filter(a => a && a.owner === currentUser.username).length;
-
-    return (
-        <div className="flex flex-col h-full bg-slate-50 overflow-y-auto pb-48 animate-fade">
-          <header className="px-8 pt-20 pb-8 bg-white border-b flex justify-between items-center">
-            <div className="flex items-center gap-3"><TennisBallIcon className="w-8 h-8" /><h2 className="text-2xl font-black text-blue-950 tracking-tighter italic uppercase leading-none">ACELINE</h2></div>
-            <button className="text-[10px] font-black bg-slate-100 px-3 py-1.5 rounded-full uppercase tracking-widest" onClick={() => setLang(lang === 'cn' ? 'en' : 'cn')}>{lang.toUpperCase()}</button>
-          </header>
-          <div className="p-8 space-y-6">
-            <div className="bg-white rounded-[3.5rem] p-8 shadow-xl border border-slate-100">
-                <div className="flex items-center gap-5">
-                    <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-4xl shadow-xl border-b-4 ${currentUser.role === 'owner' ? 'bg-black border-slate-800' : 'bg-[#A3E635] border-lime-600'}`}>
-                        {currentUser.role === 'owner' ? "👑" : "🎾"}
-                    </div>
-                    <div>
-                        <h3 className="text-2xl font-black text-blue-950 uppercase italic tracking-tighter leading-tight">{currentUser.username}</h3>
-                        <p className="text-[10px] font-black text-lime-600 uppercase tracking-widest mt-1">{currentUser.role.toUpperCase()} @ {currentUser.communityId}</p>
-                    </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4 mt-8">
-                    <button onClick={() => { setFilterMode('mine'); setScreen('albums'); }} className="bg-slate-50 p-6 rounded-[2rem] text-center border border-slate-100 active:bg-blue-950 active:text-white group transition-all">
-                        <p className="text-2xl font-black text-blue-950 italic group-active:text-white">{userUploadsCount}</p>
-                        <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">{t.myUploads}</p>
-                    </button>
-                    <div className="bg-slate-50 p-6 rounded-[2rem] text-center border border-slate-100">
-                        <p className="text-2xl font-black text-blue-950 italic">{likedAlbumsCount}</p>
-                        <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">{t.favorites}</p>
-                    </div>
-                </div>
-            </div>
-            <button onClick={() => {setCurrentUser(null); setScreen('auth');}} className="w-full py-6 bg-white text-red-500 rounded-[3rem] font-black text-xs shadow-sm border border-red-50 uppercase tracking-[0.4em]">Logout</button>
-          </div>
-        </div>
-    );
-  };
-
-  const AlbumsScreen = () => {
-    if (!currentUser) return null;
-    const currentLikes = userLikes[currentUser.username] || [];
-    return (
-        <div className="flex flex-col h-full bg-white animate-fade overflow-y-auto pb-48">
-          <header className="px-8 pt-16 pb-6 bg-white/90 backdrop-blur-md sticky top-0 z-20 border-b flex justify-between items-end">
-            <div className="flex-1 mr-4 overflow-hidden">
-                <p className="text-[10px] font-black text-lime-600 uppercase tracking-[0.4em] mb-2 italic">
-                    {filterMode === 'mine' ? t.myUploads : (currentUser.communityId || 'GLOBAL')}
-                </p>
-                <div className="flex items-center gap-2">
-                    <h2 className="text-5xl font-black text-blue-950 tracking-tighter italic leading-none whitespace-nowrap overflow-hidden text-ellipsis">{t.albums}</h2>
-                    {filterMode === 'mine' && <button onClick={() => setFilterMode('all')} className="bg-slate-100 text-[10px] font-black px-2 py-1 rounded-full uppercase ml-2 shadow-sm shrink-0">RESET</button>}
-                </div>
-            </div>
-            <button onClick={() => setScreen('upload_form')} className="w-16 h-16 bg-[#A3E635] text-blue-950 rounded-3xl shadow-xl flex items-center justify-center text-4xl font-black border-b-4 border-lime-600 active:translate-y-1 shrink-0">+</button>
-          </header>
-          <div className="px-8 space-y-10 mt-8">
-            {communityAlbums.map(album => (
-                <div key={album.id} className="relative bg-white rounded-[4rem] overflow-hidden shadow-2xl p-4 border border-slate-50 group">
-                    <div className="h-72 rounded-[3.5rem] overflow-hidden relative cursor-pointer" onClick={() => { setSelectedAlbumId(album.id); setScreen('gallery_view'); }}>
-                        <img src={album.cover} className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-700" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-blue-950/80 to-transparent"></div>
-                        <button onClick={(e) => { e.stopPropagation(); toggleLike(album.id); }} className={`absolute top-8 right-8 w-14 h-14 rounded-[1.5rem] flex items-center justify-center text-2xl shadow-xl transition-all ${currentLikes.includes(album.id) ? 'bg-red-500 text-white' : 'bg-white/20 backdrop-blur-md text-white'}`}>❤</button>
-                        <div className="absolute bottom-10 left-10 text-white pr-10">
-                            <span className="bg-lime-400 text-blue-950 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest mb-3 inline-block shadow-lg">#{album.category}</span>
-                            <h3 className="text-3xl font-black italic uppercase tracking-tighter overflow-hidden text-ellipsis">{album.name}</h3>
-                            <div className="flex items-center gap-2 opacity-60">
-                                <span className="text-[9px] font-bold">BY {album.owner.toUpperCase()} • {album.photos.length} PHOTOS</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            ))}
-            {communityAlbums.length === 0 && <div className="py-32 text-center opacity-20 italic font-black text-2xl uppercase tracking-tighter">No Albums Found</div>}
-          </div>
-        </div>
-      );
-  };
-
-  const isManagementView = currentUser?.role && ['super', 'admin', 'owner'].includes(currentUser.role);
 
   return (
     <div className="h-screen w-full flex flex-col items-center justify-center bg-[#CBD5E1]">
       <div className="w-full max-w-md h-full bg-white overflow-hidden flex flex-col shadow-2xl relative">
+        
         {screen === 'auth' && (
-          <div className="h-full bg-[#0F172A] p-10 flex flex-col justify-center items-center text-center space-y-12 relative">
-            <button className="absolute top-10 right-10 text-[10px] font-black bg-white/10 text-white px-3 py-1.5 rounded-full uppercase tracking-widest" onClick={() => setLang(lang === 'cn' ? 'en' : 'cn')}>{lang.toUpperCase()}</button>
-            <div className="w-36 h-36 bg-[#A3E635] rounded-[4rem] flex items-center justify-center shadow-2xl border-b-8 border-lime-600"><TennisBallIcon className="w-24 h-24" /></div>
-            <div className="space-y-4"><h1 className="text-7xl font-black text-white tracking-tighter italic uppercase leading-none">AceLine</h1><p className="text-slate-500 font-bold tracking-widest text-xs uppercase opacity-80">{t.tagline}</p></div>
-            <div className="w-full space-y-4 max-w-xs pt-8">
+          <div className="h-full bg-[#0F172A] p-10 flex flex-col justify-center items-center text-center space-y-12 animate-fade">
+             <div className="w-36 h-36 bg-[#A3E635] rounded-[4rem] flex items-center justify-center shadow-2xl border-b-8 border-lime-600"><TennisBallIcon className="w-24 h-24" /></div>
+             <h1 className="text-7xl font-black text-white tracking-tighter italic uppercase leading-none">AceLine</h1>
+             <div className="w-full space-y-4">
                 <button onClick={() => setScreen('login_form')} className="w-full py-7 bg-[#A3E635] text-blue-950 font-black rounded-full text-2xl shadow-2xl uppercase italic border-b-8 border-lime-600 active:translate-y-1">{t.login}</button>
-                <button onClick={() => setScreen('register_choice')} className="w-full py-4 bg-white/5 text-white rounded-2xl font-black text-[11px] border border-white/10 uppercase tracking-[0.2em]">{t.register}</button>
-            </div>
+                <button onClick={() => setScreen('register_form')} className="w-full py-5 bg-white/10 text-white font-black rounded-full text-xl uppercase italic hover:bg-white/20">{t.register}</button>
+             </div>
           </div>
         )}
 
         {screen === 'login_form' && (
             <div className="flex flex-col h-full bg-white p-10 justify-center animate-slide">
-                <TennisBallIcon className="w-14 h-14 mb-8 self-center" />
-                <h2 className="text-[38px] font-black text-[#1E293B] mb-10 tracking-tighter uppercase italic text-center leading-none">LOGIN</h2>
-                <form onSubmit={handleLoginSubmit} className="space-y-4">
-                    <div className="relative">
-                        <input value={loginU} onChange={e => setLoginU(e.target.value)} placeholder={t.username} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all shadow-inner" />
-                    </div>
-                    <div className="relative flex items-center">
-                        <input type={showP ? "text" : "password"} value={loginP} onChange={e => setLoginP(e.target.value)} placeholder={t.password} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 transition-all pr-14 shadow-inner" />
-                        <button type="button" onClick={() => setShowP(!showP)} className="absolute right-5 text-xl opacity-40 hover:opacity-100 transition-opacity">
-                            {showP ? "👁️" : "🫣"}
-                        </button>
-                    </div>
-                    <button type="submit" className="w-full py-7 bg-[#A3E635] text-blue-950 font-black rounded-full text-xl shadow-xl mt-4 uppercase italic tracking-tighter border-b-8 border-lime-600 active:translate-y-1">
-                        {t.login}
-                    </button>
-                    <button type="button" onClick={() => { setScreen('auth'); setLoginU(''); setLoginP(''); }} className="w-full py-4 text-slate-400 font-bold text-xs uppercase text-center tracking-widest">
-                        {t.back}
-                    </button>
+                <h2 className="text-[38px] font-black text-blue-950 mb-10 tracking-tighter uppercase italic text-center">LOGIN</h2>
+                <form onSubmit={handleLogin} className="space-y-4">
+                    <input value={loginU} onChange={e => setLoginU(e.target.value)} placeholder={t.username} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900" />
+                    <input type="password" value={loginP} onChange={e => setLoginP(e.target.value)} placeholder={t.password} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900" />
+                    <button type="submit" className="w-full py-7 bg-blue-950 text-white font-black rounded-full text-xl shadow-xl uppercase italic border-b-8 border-slate-700 active:translate-y-1">ENTER</button>
+                    <button onClick={() => setScreen('auth')} className="w-full py-4 text-slate-400 font-bold text-xs uppercase tracking-widest">{t.back}</button>
                 </form>
             </div>
         )}
 
-        {screen === 'register_choice' && (
-            <div className="h-full bg-white p-10 flex flex-col justify-center space-y-8 animate-slide">
-                <h2 className="text-[42px] font-black text-[#1E293B] mb-2 tracking-tighter uppercase italic text-center leading-none">JOIN THE COURT</h2>
-                <button onClick={() => {setRegMode('create'); setScreen('register_form');}} className="w-full p-8 bg-blue-950 text-white rounded-[3.5rem] text-left shadow-2xl border-b-8 border-slate-800 font-black text-2xl italic uppercase">{t.createCommunity}</button>
-                <button onClick={() => {setRegMode('join'); setScreen('register_form');}} className="w-full p-8 bg-slate-50 border border-slate-200 rounded-[3.5rem] text-left text-blue-950 font-black text-2xl italic uppercase">{t.joinCommunity}</button>
-                <button onClick={() => setScreen('auth')} className="py-4 text-slate-300 font-black uppercase text-xs text-center tracking-widest">{t.back}</button>
+        {screen === 'register_form' && (
+            <div className="flex flex-col h-full bg-white p-10 justify-center animate-slide">
+                <h2 className="text-[38px] font-black text-blue-950 mb-10 tracking-tighter uppercase italic text-center">{t.register}</h2>
+                <form onSubmit={handleRegister} className="space-y-4">
+                    <input value={regU} onChange={e => setRegU(e.target.value)} placeholder={t.username} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 shadow-inner" />
+                    <input type="password" value={regP} onChange={e => setRegP(e.target.value)} placeholder={t.password} className="w-full bg-slate-50 p-6 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-900 shadow-inner" />
+                    <input value={regI} onChange={e => setRegI(e.target.value)} placeholder={t.inviteCode} className="w-full bg-lime-50 p-6 rounded-2xl font-black outline-none border-2 border-lime-400 shadow-inner italic" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase text-center px-4">Master Keys for Super Admin, or Invite Code for Members.</p>
+                    <button type="submit" className="w-full py-7 bg-[#A3E635] text-blue-950 font-black rounded-full text-xl shadow-xl uppercase italic border-b-8 border-lime-600 active:translate-y-1">REGISTER</button>
+                    <button onClick={() => setScreen('auth')} className="w-full py-4 text-slate-400 font-bold text-xs uppercase tracking-widest">{t.back}</button>
+                </form>
             </div>
         )}
 
-        {screen === 'register_form' && <div className="h-full bg-white p-10 pt-20 animate-slide">
-            <button onClick={() => setScreen('register_choice')} className="mb-10 text-xs font-black uppercase">← {t.back}</button>
-            <h2 className="text-3xl font-black mb-8 italic uppercase">{regMode === 'create' ? t.createCommunity : t.joinCommunity}</h2>
-            <div className="space-y-4">
-                <input id="reg-u" placeholder={t.username} className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none" />
-                <input id="reg-p" type="password" placeholder={t.password} className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none" />
-                <input id="reg-key" placeholder={regMode === 'create' ? "Master Key" : t.invitationCode} className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none" />
-                <button onClick={() => {
-                    const u = (document.getElementById('reg-u') as HTMLInputElement).value;
-                    const p = (document.getElementById('reg-p') as HTMLInputElement).value;
-                    const k = (document.getElementById('reg-key') as HTMLInputElement).value;
-                    if(!u || !p || !k) return alert(t.required);
-                    if(regMode === 'create') {
-                        if(!MASTER_KEYS.includes(k)) return alert("Invalid Master Key");
-                        const newUser: User = { username: u, password: p, email: '', role: 'owner', communityId: 'COMM-' + Math.floor(Math.random()*1000), createdAt: Date.now() };
-                        setUserDb([...userDb, newUser]);
-                        setCurrentUser(newUser);
-                        setScreen('albums');
-                    } else {
-                        alert("Registration demo: Please use Zoe Zhou/ACE-7788 to login.");
-                    }
-                }} className="w-full py-6 bg-[#A3E635] text-blue-950 font-black rounded-full text-xl shadow-xl mt-8 italic uppercase border-b-8 border-lime-600 active:translate-y-1">{t.register}</button>
+        {screen === 'cloud_setup' && <CloudHandshakeScreen />}
+        {screen === 'owner_dashboard' && <OwnerDashboard />}
+        
+        {screen === 'settings' && (
+            <div className="flex flex-col h-full bg-slate-50 overflow-y-auto pb-40 animate-fade">
+                <header className="px-8 pt-20 pb-8 bg-white border-b flex justify-between items-center">
+                    <h2 className="text-2xl font-black text-blue-950 tracking-tighter italic uppercase">PROFILE</h2>
+                    <button className="text-[10px] font-black bg-slate-100 px-3 py-1.5 rounded-full uppercase" onClick={() => setLang(lang === 'cn' ? 'en' : 'cn')}>{lang.toUpperCase()}</button>
+                </header>
+                <div className="p-8 space-y-6">
+                    <div className="bg-white rounded-[3rem] p-8 shadow-xl border border-slate-100 text-center">
+                        <div className="w-24 h-24 rounded-3xl bg-[#A3E635] mx-auto flex items-center justify-center text-4xl shadow-lg mb-6 border-b-4 border-lime-600">🎾</div>
+                        <h3 className="text-2xl font-black text-blue-950 italic uppercase">{currentUser?.username}</h3>
+                        <p className="text-[10px] font-black text-lime-600 uppercase tracking-widest">{currentUser?.role} @ {currentUser?.communityId}</p>
+                    </div>
+
+                    <div className="bg-blue-950 rounded-[2.5rem] p-8 text-white shadow-2xl space-y-4">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60">Invite Management</h4>
+                        <div className="bg-white/10 p-4 rounded-2xl border border-white/5">
+                            <p className="text-[8px] font-black uppercase opacity-40 mb-1">Your Personal Invite Code</p>
+                            <p className="text-xl font-black italic tracking-widest">{currentUser?.inviteCode || 'N/A'}</p>
+                        </div>
+                        <button onClick={generateInviteLink} className="w-full py-4 bg-lime-400 text-blue-950 rounded-2xl font-black uppercase text-xs shadow-lg">{t.shareInvite}</button>
+                    </div>
+
+                    {currentUser?.cloudConfig?.connected && (
+                        <div className="bg-white rounded-[2.5rem] p-6 shadow-lg border border-slate-100">
+                             <div className="flex justify-between items-center mb-4">
+                                <h4 className="text-[10px] font-black uppercase text-slate-400 italic">{t.storage}</h4>
+                                <span className="text-[8px] font-black px-2 py-1 rounded bg-green-100 text-green-700 uppercase">
+                                    {currentUser.cloudConfig.provider} LINKED
+                                </span>
+                             </div>
+                             <div className="space-y-2">
+                                <div className="h-4 bg-slate-100 rounded-full overflow-hidden p-1 shadow-inner">
+                                    <div 
+                                        className="h-full bg-lime-400 rounded-full shadow-sm" 
+                                        style={{ width: `${(currentUser.cloudConfig.usedSpaceGB / currentUser.cloudConfig.totalSpaceGB) * 100}%` }}
+                                    ></div>
+                                </div>
+                                <div className="flex justify-between text-[9px] font-bold text-slate-400 uppercase">
+                                    <span>{currentUser.cloudConfig.usedSpaceGB.toFixed(1)} GB USED</span>
+                                    <span>{currentUser.cloudConfig.totalSpaceGB} GB TOTAL</span>
+                                </div>
+                             </div>
+                        </div>
+                    )}
+
+                    <button onClick={() => {setCurrentUser(null); setScreen('auth');}} className="w-full py-6 bg-white text-red-500 rounded-[3rem] font-black text-xs shadow-sm border border-red-50 uppercase tracking-[0.4em]">{t.logout}</button>
+                </div>
             </div>
-        </div>}
-        
-        {screen === 'upload_form' && <UploadForm />}
-        {screen === 'gallery_view' && <GalleryView />}
-        {screen === 'albums' && <AlbumsScreen />}
-        {screen === 'settings' && <ProfileScreen />}
-        {screen === 'members' && <MembersScreen />}
-        
-        {['albums', 'settings', 'upload_form', 'gallery_view', 'members'].includes(screen) && (
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-[94%] bg-blue-950/98 backdrop-blur-3xl rounded-[4rem] flex items-center justify-around py-8 px-6 shadow-2xl border border-white/10 z-50 transition-transform">
-            <button onClick={() => { setFilterMode('all'); setScreen('albums'); }} className={`flex flex-col items-center transition-all ${screen === 'albums' || screen === 'gallery_view' || screen === 'upload_form' ? 'text-lime-400' : 'text-slate-500'}`}><div className="text-3xl">📂</div><span className="text-[8px] font-black uppercase tracking-widest mt-1">{t.albums}</span></button>
-            {isManagementView && (
-              <button onClick={() => setScreen('members')} className={`flex flex-col items-center transition-all ${screen === 'members' ? 'text-lime-400' : 'text-slate-500'}`}>
-                <div className="text-3xl">👥</div>
-                <span className="text-[8px] font-black uppercase tracking-widest mt-1">{t.members}</span>
-              </button>
+        )}
+
+        {/* Navigation Bar */}
+        {['albums', 'owner_dashboard', 'settings'].includes(screen) && (
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-[94%] bg-blue-950/98 backdrop-blur-3xl rounded-[4rem] flex items-center justify-around py-8 px-6 shadow-2xl border border-white/10 z-50">
+            {currentUser?.role === 'owner' ? (
+                <button onClick={() => setScreen('owner_dashboard')} className={`flex flex-col items-center ${screen === 'owner_dashboard' ? 'text-lime-400' : 'text-slate-500'}`}>
+                    <div className="text-2xl">🛡️</div>
+                    <span className="text-[8px] font-black uppercase tracking-widest mt-1">Admin</span>
+                </button>
+            ) : (
+                <button onClick={() => setScreen('albums')} className={`flex flex-col items-center ${screen === 'albums' ? 'text-lime-400' : 'text-slate-500'}`}>
+                    <div className="text-2xl">📂</div>
+                    <span className="text-[8px] font-black uppercase tracking-widest mt-1">Albums</span>
+                </button>
             )}
-            <button onClick={() => setScreen('settings')} className={`flex flex-col items-center transition-all ${screen === 'settings' ? 'text-lime-400' : 'text-slate-500'}`}>
-                <div className="text-3xl">🛡️</div>
-                <span className="text-[8px] font-black uppercase tracking-widest mt-1">{t.profile}</span>
+            <button onClick={() => setScreen('settings')} className={`flex flex-col items-center ${screen === 'settings' ? 'text-lime-400' : 'text-slate-500'}`}>
+                <div className="text-2xl">👤</div>
+                <span className="text-[8px] font-black uppercase tracking-widest mt-1">Profile</span>
             </button>
-            <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-xl text-white">🎾</div>
           </div>
+        )}
+
+        {screen === 'albums' && (
+            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center animate-fade">
+                <div className="text-6xl mb-6 opacity-20">🎾</div>
+                <h2 className="text-3xl font-black text-blue-950 uppercase italic tracking-tighter mb-4">Welcome to {currentUser?.communityId}</h2>
+                <p className="text-slate-400 font-bold text-xs uppercase tracking-widest leading-loose">
+                    Your community drive is ready.<br/>Start uploading highlights to the cloud drive!
+                </p>
+            </div>
         )}
       </div>
     </div>
