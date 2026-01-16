@@ -4,39 +4,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>AceLine - Tennis Community Hub</title>
+    <title>ACELINE</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body, html { 
-            margin: 0; padding: 0; width: 100%; height: 100%; 
-            background-color: #F8FAFC; 
-            font-family: 'Inter', sans-serif;
-            overflow: hidden;
+        
+        /* 核心修复：彻底放弃对高度的动态监听 */
+        html { 
+            background-color: #FDFDFD;
+            -webkit-text-size-adjust: 100%;
+            height: auto; /* 关键：不要 100% */
         }
-        #root { width: 100%; height: 100%; }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
+        body { 
+            margin: 0; padding: 0; 
+            width: 100%; 
+            min-height: 1000px; /* 给一个固定的大高度，让键盘有空间而不挤压容器 */
+            font-family: 'Inter', sans-serif;
+            background-color: #FDFDFD;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        #root { 
+            width: 100%;
+            position: relative;
+            min-height: 100vh;
+        }
+
+        .responsive-title {
+            font-size: clamp(54px, 14vw, 84px);
+            line-height: 0.85;
+        }
+
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-        .animate-fade { animation: fade-in 0.4s ease-out forwards; }
+        .animate-fade { animation: fade-in 0.3s ease-out forwards; }
         
-        input { font-size: 16px !important; } /* 防止 iOS 缩放 */
-        .break-word { word-break: break-all; overflow-wrap: break-word; }
+        /* 16px 是 iOS 的物理红线，低于此值必闪屏/跳跃 */
+        input { 
+            font-size: 16px !important; 
+            -webkit-appearance: none;
+            background: none;
+            border: none;
+            border-radius: 0;
+        }
+        input:focus { outline: none; }
+
+        .no-select { -webkit-user-select: none; user-select: none; }
     </style>
-    <script type="importmap">
-    {
-      "imports": {
-        "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-        "react/": "https://esm.sh/react@^19.2.3/",
-        "react": "https://esm.sh/react@^19.2.3",
-        "@google/genai": "https://esm.sh/@google/genai@^1.37.0"
-      }
-    }
-    </script>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.37.0"
+  }
+}
+</script>
 </head>
-<body class="select-none">
+<body class="no-select">
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
 </body>
